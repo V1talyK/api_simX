@@ -1,9 +1,13 @@
 module ITPM_SimX
 
-include("src/libs.jl")
-include("src/funs_2D.jl")
+using NearestNeighbors, LinearAlgebra, SparseArrays, SuiteSparse
 
-export make_gdm
+include("libs.jl")
+include("funs_2D.jl")
+include("linAlgLib.jl")
+
+export make_gdm, make_well, make_sim
+
 # Write your package code here.
 
 end
