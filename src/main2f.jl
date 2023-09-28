@@ -4,10 +4,14 @@ using ITPM_SimX, UnicodePlots
 
 @info "Тестирование прямого расчёта симулятора"
 grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 0.5)
+gdm_sat = make_gdm_prop_sat()
 
 wxy9 = collect(Iterators.product(x,x))[:]
 well = make_well(wxy9,grd)
 nw = length(well)
+
+satf = calc_sat_step(kp, he, eVp, Vp, grd, gdm_prop, swInj, nt, fkr, gdm_sat, well,
+                    qof, ivfo, LFo)
 
 sim_calc = make_sim(grd,gdm_prop, well, prp, nt)
 

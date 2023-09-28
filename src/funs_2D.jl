@@ -109,7 +109,7 @@ function make_rc(nx,ny)
     return rc
 end
 
-function make_gdm(;he_init = 1.)
+function make_gdm(;he_init = 1., kp_init = 0.2)
     #Создаём всё что надо
     nx, ny, nt = 21, 21, 360;
     Lx, Ly = 1000, 1000;
