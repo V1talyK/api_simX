@@ -67,6 +67,76 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     return msim
 end
 
+function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
+    nc = grd.nc
+    nw = maximum(getindex.(well,2))
+
+    rc = grd.rc
+    λbi = grd.λbi
+    he = copy(prp.he)
+
+    Paq = gdm_prop.Paq
+    P0 = gdm_prop.P0
+    dt = gdm_prop.dt
+
+    λbc = zeros(nc);
+    p0 = zeros(Float32, nc);
+    PM = zeros(Float32, nc+nw,nt)
+    SW = zeros(Float32, nc,nt)
+    pwc = zeros(nw,nt)
+    pplc = zeros(nw,nt)
+    qwc = zeros(nw,nt)
+    pplcBt = zeros(Float32, nw)
+    GM = ones(Float32, nc);
+    bb = zeros(Float32,nc+nw)
+
+    λbc[λbi] .= gdm_prop.λb;
+
+    tM = (M2M = sparse(getindex.(well,2),getindex.(well,1),1,nw,nc),
+          M2Mw = sparse(getindex.(well,1),getindex.(well,2),1,nc+nw,nw))
+    actW = trues(nw,nt)
+    ufl = falses(nw,nt)
+
+    WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nw)
+    w1 = getindex.(well,1)
+    w2 = getindex.(well,2)
+
+    A, W1 = makeA(view(rc,:,1),view(rc,:,2),nc,nw,w1,w2)
+    makeAG = make_fun_AG(grd.nc,grd.rc,grd.dx,grd.ds);
+
+    qw0 = zeros(Float32, nw, nt)
+    pw0 = ones(Float32, nw, nt)
+    kp0 = prp.kp
+    he0 = prp.he
+
+    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0)
+        GM.=kp.*he.*10. *8.64*1e-3;
+        AG, T = makeAG(kp.*10. *8.64*1e-3,he)
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,prp.eVp)
+        ACL = cholesky(-A)
+        CL = make_CL_in_julia(ACL, Threads.nthreads())
+        updateCL!(CL, ACL)
+        p0 .= P0
+        AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
+
+        for t=1:nt
+            bb .= makeB(nc,nw,Paq,T,well,qw[:,t],λbc,p0,prp.eVp);
+            PM[:,t] = ACL\bb;
+            PM[:,t] .= .-PM[:,t]
+            p0 .= view(PM,1:nc,t)
+            pwc[:,t] = view(PM,nc+1:nc+nw,t)
+            pplcBt .= tM.M2M*p0;
+            pplc[:,t] .= pplcBt;
+            qwc[:,t] .= qw[:,t]
+            SW[:,t] = satc(p0, view(qwc,:,t), GM, AG, false)
+        end
+        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW)
+        return rsl
+    end
+
+    return msim
+end
+
 function make_gdm_prop()
     bet = 1e-4;
     Paq = 10;
@@ -109,9 +179,9 @@ function make_rc(nx,ny)
     return rc
 end
 
-function make_gdm(;he_init = 1., kp_init = 0.2)
+function make_gdm(;he_init = 1., kp_init = 0.2, nt_init = 360)
     #Создаём всё что надо
-    nx, ny, nt = 21, 21, 360;
+    nx, ny, nt = 21, 21, nt_init;
     Lx, Ly = 1000, 1000;
     grd = make_grid(nx,ny,Lx,Ly); #кол-во ячеек x, кол-во ячеек y, размер X, размер Y
     gdm_p = make_gdm_prop()

@@ -7,11 +7,11 @@ function x2prm!(V, x, xind;
     iFun.makeGW!(V.cell,V.well)
 end
 
-function calc_wtc(Sw, qw, well,fkr)
+function calc_wtc(Sw, fkrp, well)
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
 
-    wtc = fkr.w.inj(view(Sw,w1,:))./(fkr.w.inj(view(Sw,w1,:)).+fkr.o.well(view(Sw,w1,:)))
+    wtc = fkrp.w.(view(Sw,w1,:))./(fkrp.w.(view(Sw,w1,:)).+fkrp.o.(1 .- view(Sw,w1,:)))
     return wtc
 end
 
@@ -27,7 +27,7 @@ function make_calc_krw(n, alp, xo, xw, mu)
     xo1 = 1-xo
     fun = function calc_krw(x, pwr = n, coef = alp)
         x = clamp(x,xw,xo1)
-        @fastmath coef*clamp(((x-xw)/xm) ^pwr,0,1)/mu
+        @fastmath coef*clamp(((x-xw)/xm) ^pwr, 0.0, 1.0)/mu
     end
 
     dfun = function calc_dkrw(x, pwr = n, coef = alp)
@@ -37,13 +37,14 @@ function make_calc_krw(n, alp, xo, xw, mu)
     return fun, dfun
 end
 
-function calc_sat_step(prp, grd, gdm_prop, fkr, gdm_s, well, nt, LF;
+function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
                        step_t = Inf)
     Pa, Δt = gdm_prop.Paq, gdm_prop.dt;
     nc = grd.nc
 
-    Sw = zeros(Float32, nc, nt);  Sw.=gdm_s.Sw0;
-    Sw0 = zeros(Float32, nc);     Sw0 .= gdm_s.Sw0
+    Sw = zeros(Float32, nc, nt);  Sw.=gdm_sat.Sw0;
+    Sw0 = zeros(Float32, nc);     Sw0 .= gdm_sat.Sw0
+    fkrp = gdm_sat.fkrp;
 
     r = view(grd.rc,:,1)
     c = view(grd.rc,:,2)
@@ -52,13 +53,10 @@ function calc_sat_step(prp, grd, gdm_prop, fkr, gdm_s, well, nt, LF;
     bw = zeros(Float32, nc)
     sbi = grd.λbi
     sbv = zeros(Float32, nc);
-    sbv[sbi] .= gdm_p.λb;
+    sbv[sbi] .= gdm_prop.λb;
 
     bw_aq = zeros(Float32, length(sbi))
-    bw_aq .= fkr.w.aq(gdm_s.Swaq)
-
-    makeAG = make_fun_AG(grd.nc,grd.rc,grd.dx,grd.ds);
-    GG = zeros(Float64,length(r));
+    bw_aq .= fkrp.w(gdm_sat.Swaq)
 
     A2=zeros(Float64,nc);
     AW=zeros(Float64,nc);
@@ -71,7 +69,7 @@ function calc_sat_step(prp, grd, gdm_prop, fkr, gdm_s, well, nt, LF;
     kro = zeros(Float32, nc)
     AWP = zeros(nc)
     dPaq = zeros(Float32, length(sbi))
-    PM0 = zeros(nc); PM0 .= gdm_p.P0;
+    PM0 = zeros(nc); PM0 .= gdm_prop.P0;
 
     TAGP = zeros(length(r))
     AGP = zeros(Float32, length(r))
@@ -79,9 +77,8 @@ function calc_sat_step(prp, grd, gdm_prop, fkr, gdm_s, well, nt, LF;
 
     bale = zeros(Float32, nc)
     Sw0i = copy(Sw0)
-    qc_oil =  zeros(Float32, length(unique(w2)))
 
-    function calc_tstep(Pt, qt, t, GM, AG, dP_du, dq_du, flags)
+    function calc_tstep(Pt, qt, GM, AG, flags)
         #вверх по потоку ячейки
         dP .= view(Pt,r) .- view(Pt,c)
         sdp = sign.(dP)
@@ -125,8 +122,8 @@ function calc_sat_step(prp, grd, gdm_prop, fkr, gdm_s, well, nt, LF;
 
         @inbounds while flag
             k+=1
-            krw .= fkr.w.cell(Sw0i)
-            kro .= fkr.o.cell(Sw0i)
+            krw .= fkrp.w.(Sw0i)
+            kro .= fkrp.o.(1.0 .- Sw0i)
             bale .= 1 ./(krw.+kro)
 
             Tw[fp] = vkrwr.*baler
@@ -151,14 +148,13 @@ function calc_sat_step(prp, grd, gdm_prop, fkr, gdm_s, well, nt, LF;
             bbw[w1I] .= view(qt,injI)
             bbw[w1P] .= krw[w1P].*view(qt,prodI).*bale[w1P]
             #PF.updatesp!(Aw,1:nc,1:nc,A2)
+            #println("www=",sum(krw))
             AWP .= AWP .+A2
-            #println("www=",sum(AWP))
+            #println("www=",sum(kro))
             AWP .= AWP.+bbw
-            #println(extrema(Sw0i))
             AWP .= AWP.- bw
-            #println(sum(AWP))
             AWP .= AWP./prp.Vp
-
+            #wer
             cum_Δt+=alp
             # println("t=$t, k=$k")
             if alp == 0
@@ -167,17 +163,12 @@ function calc_sat_step(prp, grd, gdm_prop, fkr, gdm_s, well, nt, LF;
             #println("wee=",extrema(alp.*Δt .*AWP))
             Sw00i .= Sw0i
             Sw0i .= Sw0i .- alp.*Δt .*AWP
-            Sw0i .= clamp.(Sw0i,0.0,1.0)
-            #Sw0i .= Swi[:,i]
+                    Sw0i .= clamp.(Sw0i,0.0,1.0)
+            #println(Sw0i)
+            #wer
             flag = (cum_Δt < 1) & (k<1000)
 
-            kro .= fkr.o.cell(Sw0i)
-            qc_oil .= view(kro,w1).*qt
-            qc_oil[injI] .= 0.0
-
         end
-
-        Sw[:,t] .= Sw0i
         PM0 .= Pt
         return Sw0i
     end
@@ -189,5 +180,14 @@ function make_gdm_prop_sat()
     bet = 1e-4;
     Swaq = 1.0;
     Sw0 = 0.0;
-    return (bet = bet, Swaq = Swaq, Sw0 = Sw0)
+
+    mu = (o = 1, w = 1)
+    xo = 0.;
+    xw = 0.;
+    n_oil = 1# - степень фазовой нефть
+    n_wather = 1# - степень фазовой вода
+    fkrw, fdkrw = make_calc_krw(n_wather, 1, xo, xw, mu.w)
+    fkro, fdkro = make_calc_krw(n_oil, 1, xw, xo, mu.o)
+
+    return (bet = bet, Swaq = Swaq, Sw0 = Sw0, fkrp = (w = fkrw, o = fkro))
 end
