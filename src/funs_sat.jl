@@ -102,6 +102,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         AWP[w1] *= 2
         alpt, alpi = findmax(AWP.*Δt./prp.Vp)
         alp0 = 1/alpt
+        alp0 = clamp(alp0,0,1)
 
         vkrwr = view(krw,rfp)
         vkrwc = view(krw,cfp)
@@ -131,6 +132,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             mn = bale[alpi]*krw[alpi]
             mn = clamp(mn,0.01,1)
             alp = alp0/4
+
             #println(mn)
 
             TAGP .= .*(Tw,AGP)
@@ -138,8 +140,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             #A2[sbi] .= view(A2,sbi) .+ sbv.*view(GM,sbi)
             A2 .= prp.eVp.*Sw0i.*(Pt .- PM0)./alp;
 
-            bw_aq .= sbv[sbi].*view(GM,sbi)
-            bw_aq[bfl] = view(bw,bfl).*1 .*view(bale,view(sbi,bfl))
+            bw[sbi] .= sbv[sbi].*view(GM,sbi)
+            bw_aq[bfl] = view(bw,view(sbi,bfl)).*1 .*view(bale,view(sbi,bfl))
             bw_aq[nbfl] = .*(vbwi,vkrwb,baleb)
             bw[sbi] .= bw_aq.*dPaq
 
@@ -170,6 +172,10 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
         end
         PM0 .= Pt
+        #println(cum_Δt)
+        #println(sum(Sw0i.*prp.Vp) - sum(Sw00.*prp.Vp),"  ",krw[w1P].*view(qt,prodI).*bale[w1P]*30.5,
+        #                                              "  ",kro[w1P].*view(qt,prodI).*bale[w1P]*30.5,
+    #                                                  "  ",sum(bw))
         return Sw0i
     end
 
