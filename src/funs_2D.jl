@@ -88,6 +88,8 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     qwc = zeros(nw,nt)
     pplcBt = zeros(Float32, nw)
     GM = ones(Float32, nc);
+    Mbt = ones(Float32, nc); Mbt .= satc.fkrp.w.(satc.Sw0i).+satc.fkrp.o.(1.0 .- satc.Sw0i)
+    Tp = zeros(Float32, size(rc,1))
     bb = zeros(Float32,nc+nw)
 
     λbc[λbi] .= gdm_prop.λb;
@@ -108,18 +110,23 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     pw0 = ones(Float32, nw, nt)
     kp0 = prp.kp
     he0 = prp.he
+    stream_flag = trues(length(Tp))
 
     function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0)
         GM.=kp.*he.*10. *8.64*1e-3;
         AG, T = makeAG(kp.*10. *8.64*1e-3,he)
-        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,prp.eVp)
-        ACL = cholesky(-A)
-        CL = make_CL_in_julia(ACL, Threads.nthreads())
-        updateCL!(CL, ACL)
         p0 .= P0
-        AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
-
+        #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         for t=1:nt
+            stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
+            Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
+            Tp[.!stream_flag] = Mbt[view(rc,.!stream_flag,2)]
+            #println(extrema(Tp))
+            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,prp.eVp)
+            ACL = cholesky(-A)
+            CL = make_CL_in_julia(ACL, Threads.nthreads())
+            updateCL!(CL, ACL)
+
             bb .= makeB(nc,nw,Paq,T,well,qw[:,t],λbc,p0,prp.eVp);
             PM[:,t] = ACL\bb;
             PM[:,t] .= .-PM[:,t]
@@ -128,7 +135,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
             qwc[:,t] .= qw[:,t]
-            SW[:,t] = satc(p0, view(qwc,:,t), GM, AG, false)
+            SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
         end
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW)
         return rsl
@@ -186,14 +193,14 @@ function make_gdm(;he_init = 1., kp_init = 0.2, nt_init = 360)
     grd = make_grid(nx,ny,Lx,Ly); #кол-во ячеек x, кол-во ячеек y, размер X, размер Y
     gdm_p = make_gdm_prop()
 
-    kp = 0.2*ones(grd.nx,grd.ny);   kp = kp[:];
+    kp = kp_init*ones(grd.nx,grd.ny);   kp = kp[:];
     he = he_init*ones(grd.nx,grd.ny);    he = he[:];
     mp = 0.2*ones(grd.nx,grd.ny);    mp = mp[:];
 
     #Эффективный поровый объём ячеек (упругоёмкость)
     eVp = gdm_p.bet.*he.*grd.ds.*grd.ds/gdm_p.dt;
     #Поровый объём ячеек
-    Vp = he.*grd.ds.*grd.ds*0.2
+    Vp = he.*grd.ds.*grd.ds.*mp
 
     prp = (kp = kp, he = he, eVp = eVp, Vp = Vp)
 

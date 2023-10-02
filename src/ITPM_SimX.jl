@@ -9,7 +9,9 @@ include("linAlgLib.jl")
 
 export make_gdm, make_well, make_sim,
        make_gdm_prop_sat,
-       make_sim2f
+       make_sim2f,
+       calc_sat_step,
+       calc_wtc
 
 # Write your package code here.
 

@@ -125,7 +125,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             k+=1
             krw .= fkrp.w.(Sw0i)
             kro .= fkrp.o.(1.0 .- Sw0i)
-            bale .= 1 ./(krw.+kro)
+            bale .= 1 #./(krw.+kro)
 
             Tw[fp] = vkrwr.*baler
             Tw[bp] = vkrwc.*balec
@@ -176,18 +176,18 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         #println(sum(Sw0i.*prp.Vp) - sum(Sw00.*prp.Vp),"  ",krw[w1P].*view(qt,prodI).*bale[w1P]*30.5,
         #                                              "  ",kro[w1P].*view(qt,prodI).*bale[w1P]*30.5,
     #                                                  "  ",sum(bw))
-        return Sw0i
+        return Sw0i, krw .+ kro
     end
 
     return calc_tstep
 end
 
-function make_gdm_prop_sat()
+function make_gdm_prop_sat(;mu_o = 1., mu_w = 1.)
     bet = 1e-4;
     Swaq = 1.0;
     Sw0 = 0.0;
 
-    mu = (o = 1, w = 1)
+    mu = (o = mu_o, w = mu_w)
     xo = 0.;
     xw = 0.;
     n_oil = 1# - степень фазовой нефть
