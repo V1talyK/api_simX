@@ -125,10 +125,10 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             k+=1
             krw .= fkrp.w.(Sw0i)
             kro .= fkrp.o.(1.0 .- Sw0i)
-            bale .= 1 #./(krw.+kro)
+            bale .= 1 ./(krw.+kro)
 
-            Tw[fp] = vkrwr.*baler
-            Tw[bp] = vkrwc.*balec
+            Tw[fp] = vkrwr#.*baler
+            Tw[bp] = vkrwc#.*balec
             mn = bale[alpi]*krw[alpi]
             mn = clamp(mn,0.01,1)
             alp = alp0/4
@@ -142,7 +142,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
             bw[sbi] .= sbv[sbi].*view(GM,sbi)
             bw_aq[bfl] = view(bw,view(sbi,bfl)).*1 .*view(bale,view(sbi,bfl))
-            bw_aq[nbfl] = .*(vbwi,vkrwb,baleb)
+            bw_aq[nbfl] = .*(vbwi,vkrwb)#.*(vbwi,vkrwb,baleb)
             bw[sbi] .= bw_aq.*dPaq
 
             bbw .= 0.0;

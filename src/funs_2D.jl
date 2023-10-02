@@ -121,8 +121,9 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
             Tp[.!stream_flag] = Mbt[view(rc,.!stream_flag,2)]
-            #println(extrema(Tp))
-            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,prp.eVp)
+            WTp = ones(nw)
+            WTp[qw[:,t].>0.] .= Mbt[w1[qw[:,t].>0.]]
+            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
             ACL = cholesky(-A)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
