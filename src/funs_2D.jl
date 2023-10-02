@@ -49,9 +49,14 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         updateCL!(CL, ACL)
         p0 .= P0
         AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
+        rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
+        AA1 = rAdf(ACL)
 
         for t=1:nt
             bb .= makeB(nc,nw,Paq,T,well,qw[:,t],λbc,p0,prp.eVp);
+            #bb1 = rBdf(bb)
+            #temp_ppl = -AA1\bb1;
+
             PM[:,t] = ACL\bb;
             PM[:,t] .= .-PM[:,t]
             p0 .= view(PM,1:nc,t)
@@ -59,8 +64,10 @@ function make_sim(grd, gdm_prop, well, prp, nt)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
             qwc[:,t] .= qw[:,t]
+            #println(sum(abs,pplcBt.-temp_ppl))
+
         end
-        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:])
+        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], AAr = AA1)
         return rsl
     end
 
@@ -112,10 +119,16 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     he0 = prp.he
     stream_flag = trues(length(Tp))
 
+    AA1 = Vector(undef, nt)
+
     function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0)
         GM.=kp.*he.*10. *8.64*1e-3;
         AG, T = makeAG(kp.*10. *8.64*1e-3,he)
         p0 .= P0
+
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,prp.eVp)
+        ACL = cholesky(-A)
+        rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         for t=1:nt
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
@@ -123,8 +136,10 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             Tp[.!stream_flag] = Mbt[view(rc,.!stream_flag,2)]
             WTp = ones(nw)
             WTp[qw[:,t].>0.] .= Mbt[w1[qw[:,t].>0.]]
+
             updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
             ACL = cholesky(-A)
+            AA1[t] = rAdf(ACL)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
 
@@ -138,7 +153,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             qwc[:,t] .= qw[:,t]
             SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
         end
-        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW)
+        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW, AAr = AA1)
         return rsl
     end
 
@@ -308,4 +323,38 @@ function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, eV=0)
 
     updatesp!(W1,w1,w2,WIg)
     return nothing
+end
+
+function make_reduce_ma3x_dims(ACL, w1, nc)
+    nw = length(w1)
+
+
+    aw1 = setdiff(1:nc+nw,w1)
+
+    #AA1 = A11 - (A22\Matrix(A12'))'*A21
+    #bb1 = bb[w1] - (A22\Matrix(A12'))'*bb[aw1]
+
+    # ia = setdiff(1:441,w1)
+    # v12 = zeros(441)
+    # v12[1:432] .= (T.*λbc)[ia]
+    #
+    # AB12 = vcat(A12, v12')'
+    # AB21 = hcat(A21, v12)
+    function rAdf(ACL)
+        AA = sparse(ACL)
+        A11 = AA[w1,w1];
+        A22 = AA[aw1,aw1];
+        A12 = AA[w1,aw1]
+        A21 = AA[aw1,w1]
+
+        #APA = vcat(hcat(A11, (T.*λbc)[w1]), hcat((T.*λbc)[w1]', sum(T.*λbc))) - (A22\Matrix(AB12))'*AB21
+        AA1 = A11 - (A22\Matrix(A12'))'*A21
+        return AA1
+    end
+    function rBdf(bb)
+        #APA = vcat(hcat(A11, (T.*λbc)[w1]), hcat((T.*λbc)[w1]', sum(T.*λbc))) - (A22\Matrix(AB12))'*AB21
+        bb1 = bb[w1] - (A22\Matrix(A12'))'*bb[aw1]
+        return bb1
+    end
+    return rAdf, rBdf
 end
