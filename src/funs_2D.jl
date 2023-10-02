@@ -50,7 +50,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         p0 .= P0
         AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
-        AA1 = rAdf(ACL)
+        AA1 = rAdf(ACL, T, λbc)
 
         for t=1:nt
             bb .= makeB(nc,nw,Paq,T,well,qw[:,t],λbc,p0,prp.eVp);
@@ -327,10 +327,9 @@ end
 
 function make_reduce_ma3x_dims(ACL, w1, nc)
     nw = length(w1)
-
-
     aw1 = setdiff(1:nc+nw,w1)
-
+    aw2 = setdiff(1:nc,w1)
+    Aaq = zeros(nc)
     #AA1 = A11 - (A22\Matrix(A12'))'*A21
     #bb1 = bb[w1] - (A22\Matrix(A12'))'*bb[aw1]
 
@@ -340,12 +339,19 @@ function make_reduce_ma3x_dims(ACL, w1, nc)
     #
     # AB12 = vcat(A12, v12')'
     # AB21 = hcat(A21, v12)
-    function rAdf(ACL)
+    function rAdf(ACL, T, λbc)
         AA = sparse(ACL)
         A11 = AA[w1,w1];
         A22 = AA[aw1,aw1];
         A12 = AA[w1,aw1]
         A21 = AA[aw1,w1]
+        Aaq[1:(nc-nw)] .= -T[aw2].*λbc[aw2]
+        A22 = AA[aw1,aw1];
+
+        A11 = vcat(hcat(A11,zeros(nw)),hcat(zeros(nw)',-sum(Aaq)))
+        A12 = vcat(AA[w1,aw1], Aaq')
+        A21 = hcat(AA[aw1,w1], Aaq)
+        #A22
 
         #APA = vcat(hcat(A11, (T.*λbc)[w1]), hcat((T.*λbc)[w1]', sum(T.*λbc))) - (A22\Matrix(AB12))'*AB21
         AA1 = A11 - (A22\Matrix(A12'))'*A21
