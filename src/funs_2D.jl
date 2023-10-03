@@ -79,7 +79,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     nw = maximum(getindex.(well,2))
 
     rc = grd.rc
-    λbi = grd.λbi
+    bnd_ind = grd.λbi
     he = copy(prp.he)
 
     Paq = gdm_prop.Paq
@@ -99,7 +99,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     Tp = zeros(Float32, size(rc,1))
     bb = zeros(Float32,nc+nw)
 
-    λbc[λbi] .= gdm_prop.λb;
+    λbc[bnd_ind] .= gdm_prop.λb;
 
     tM = (M2M = sparse(getindex.(well,2),getindex.(well,1),1,nw,nc),
           M2Mw = sparse(getindex.(well,1),getindex.(well,2),1,nc+nw,nw))
@@ -118,6 +118,9 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     kp0 = prp.kp
     he0 = prp.he
     stream_flag = trues(length(Tp))
+    Tpa = zeros(Float32, length(bnd_ind))
+    Tpa1 = zeros(Float32, nc)
+    bnd_stream_flag = trues(length(Tpa))
 
     AA1 = Vector(undef, nt)
 
@@ -137,9 +140,17 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             WTp = ones(nw)
             WTp[qw[:,t].>0.] .= Mbt[w1[qw[:,t].>0.]]
 
+            bnd_stream_flag .= view(p0,bnd_ind) .> Paq
+            Tpa[bnd_stream_flag] = view(Mbt[bnd_ind], bnd_stream_flag)
+            # println(satc.fkrp.w.(ones(length(count(.!bnd_stream_flag)))))
+            # println(Tpa[.!bnd_stream_flag])
+            Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(count(.!bnd_stream_flag)))
+
             updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
             ACL = cholesky(-A)
-            AA1[t] = rAdf(ACL)
+
+            Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
+            AA1[t] = rAdf(ACL, Tpa1, λbc)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
 
