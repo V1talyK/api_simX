@@ -136,7 +136,11 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         for t=1:nt
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
-            Tp[.!stream_flag] = Mbt[view(rc,.!stream_flag,2)]
+            stream_flag .= view(p0,view(rc,:,1)) .< view(p0,view(rc,:,2))
+            Tp[stream_flag] = Mbt[view(rc,stream_flag,2)]
+            stream_flag .= view(p0,view(rc,:,1)) .== view(p0,view(rc,:,2))
+            Tp[stream_flag] = 2*Mbt[view(rc,stream_flag,1)].*Mbt[view(rc,stream_flag,2)]./(Mbt[view(rc,stream_flag,1)].+Mbt[view(rc,stream_flag,2)])
+
             WTp = ones(nw)
             WTp[qw[:,t].>0.] .= Mbt[w1[qw[:,t].>0.]]
 
@@ -326,6 +330,8 @@ end
 
 function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, eV=0)
     updatesp!(A,r,c,AG);
+    #println("---------")
+    #println(issymmetric(A))
     A2 = zeros(nx)
     accumarray!(A2,r,AG)
     A2 .= A2 .+ T.*λb.+eV;
@@ -333,11 +339,9 @@ function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, eV=0)
     A2[w1] .= A2[w1] .+ WIg
     updatesp!(A,1:nx,1:nx,.-A2)
 
-
     updatesp!(A,nx+1:nx+nw,nx+1:nx+nw,.-WIg)
     updatesp!(A,w1,nx.+w2,WIg)
     updatesp!(A,nx.+w2,w1,WIg)
-
     updatesp!(W1,w1,w2,WIg)
     return nothing
 end
