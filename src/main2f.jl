@@ -10,6 +10,15 @@ include("linAlgLib.jl")
 
 @info "Тестирование прямого расчёта симулятора"
 grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 0.5, he_init = 5, nt_init = 480)
+
+grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 5,
+                                     he_init = 5,
+                                     nt_init = 60,
+                                     nx_init = 100,
+                                     ny_init = 100,
+                                     Lx_init = 1000,
+                                     Ly_init = 1000)
+
 gdm_sat = make_gdm_prop_sat(mu_o = 3)
 
 wxy9 = collect(Iterators.product(x,x))[:]

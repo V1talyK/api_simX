@@ -213,10 +213,16 @@ function make_rc(nx,ny)
     return rc
 end
 
-function make_gdm(;he_init = 1., kp_init = 0.2, nt_init = 360)
+function make_gdm(;he_init = 1.,
+                   kp_init = 0.2,
+                   nt_init = 360,
+                   nx_init = 21,
+                   ny_init = 21,
+                   Lx_init = 1000,
+                   Ly_init = 1000)
     #Создаём всё что надо
-    nx, ny, nt = 21, 21, nt_init;
-    Lx, Ly = 1000, 1000;
+    nx, ny, nt = nx_init, ny_init, nt_init;
+    Lx, Ly = Lx_init, Ly_init;
     grd = make_grid(nx,ny,Lx,Ly); #кол-во ячеек x, кол-во ячеек y, размер X, размер Y
     gdm_p = make_gdm_prop()
 
