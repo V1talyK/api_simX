@@ -95,7 +95,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     qwc = zeros(nw,nt)
     pplcBt = zeros(Float32, nw)
     GM = ones(Float32, nc);
-    Mbt = ones(Float32, nc); Mbt .= satc.fkrp.w.(satc.Sw0i).+satc.fkrp.o.(1.0 .- satc.Sw0i)
+    Mbt = ones(Float32, nc); Mbt .= satc.fkrp.w.(satc.Sw0i).+satc.fkrp.o.(1f0 .- satc.Sw0i)
     Tp = zeros(Float32, size(rc,1))
     bb = zeros(Float32,nc+nw)
 
@@ -148,13 +148,13 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             Tpa[bnd_stream_flag] = view(Mbt[bnd_ind], bnd_stream_flag)
             # println(satc.fkrp.w.(ones(length(count(.!bnd_stream_flag)))))
             # println(Tpa[.!bnd_stream_flag])
-            Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(count(.!bnd_stream_flag)))
+            Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(Float32, count(.!bnd_stream_flag)))
 
             updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
             ACL = cholesky(-A)
 
             Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
-            AA1[t] = rAdf(ACL, Tpa1, λbc)
+            AA1[t] = rAdf(-A, Tpa1, λbc)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
 

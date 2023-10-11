@@ -19,7 +19,7 @@ grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 5,
                                      Lx_init = 1000,
                                      Ly_init = 1000)
 
-gdm_sat = make_gdm_prop_sat(mu_o = 3)
+gdm_sat = make_gdm_prop_sat(mu_o = 3f0)
 
 wxy9 = collect(Iterators.product(x,x))[:]
 well = make_well(wxy9,grd)
@@ -47,3 +47,5 @@ lineplot(wtc[5,:])|>println
 lineplot(dpo, kin, xlabel= "ППО", ylabel="КИН")|>println
 heatmap(reshape(rsl.PM[:,end], grd.nx, grd.ny))|>println
 heatmap(reshape(rsl.SW[:,end], grd.nx, grd.ny))|>println
+
+@profiler sim_calc(qw = qw)
