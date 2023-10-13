@@ -102,6 +102,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         AWP[w1] *= 2
         alpt, alpi = findmax(AWP.*Δt./prp.Vp)
         alp0 = 1/alpt
+        #println(alpt)
         alp0 = clamp(alp0,0,1)
 
         vkrwr = view(krw,rfp)
@@ -138,7 +139,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             TAGP .= .*(Tw,AGP)
             accumarray!(AWP, r, TAGP)
             #A2[sbi] .= view(A2,sbi) .+ sbv.*view(GM,sbi)
-            A2 .= prp.eVp.*Sw0i.*(Pt .- PM0)./alp;
+            A2 .= prp.eVp.*Sw0i.*(Pt .- PM0)#./alp;
 
             bw[sbi] .= sbv[sbi].*view(GM,sbi)
             bw_aq[bfl] = view(bw,view(sbi,bfl)).*1 .*view(bale,view(sbi,bfl))
