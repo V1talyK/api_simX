@@ -11,8 +11,8 @@ include("linAlgLib.jl")
 @info "Тестирование прямого расчёта симулятора"
 grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 0.5, he_init = 5, nt_init = 480)
 
-grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 5,
-                                     he_init = 5,
+grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 10,
+                                     he_init = 0.5,
                                      nt_init = 60,
                                      nx_init = 100,
                                      ny_init = 100,
@@ -48,4 +48,4 @@ lineplot(dpo, kin, xlabel= "ППО", ylabel="КИН")|>println
 heatmap(reshape(rsl.PM[:,end], grd.nx, grd.ny))|>println
 heatmap(reshape(rsl.SW[:,end], grd.nx, grd.ny))|>println
 
-@profiler sim_calc(qw = qw)
+#@profiler sim_calc(qw = qw)
