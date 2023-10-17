@@ -9,6 +9,13 @@ function updatesp!(sp, I, J, newK)
     end
 end
 
+function updatesp!(sp, I, J, newK::Number)
+    #Обновляем элементы матрицы A
+    @inbounds for (k,(i,j)) in enumerate(zip(I, J));
+        sp[i,j] = newK;
+    end
+end
+
 function accumarray(subs, val, sz=(maximum(subs),))
     A = zeros(eltype(val), sz...)
     accumarray!(A, subs, val)
