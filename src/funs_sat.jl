@@ -20,14 +20,21 @@ function faz(sw)
     return a*sw
 end
 
-function make_calc_krw(n, alp, xo::Float32, xw::Float32, mu)
+function make_calc_krw(n::Int64, alp::Float32, xo::Float32, xw::Float32, mu::Float32)
     #Генератор функции для расчёта фозовой проницаемости
     #n - степень кривизны
     xm = 1f0-xo-xw; #Доля подвижного объёма
     xo1 = 1f0-xo
-    fun = function calc_krw(x::Float32, pwr = n, coef = alp)
-        x = clamp(x,xw,xo1)
-        @fastmath coef*clamp(((x-xw)/xm) ^pwr, 0.0, 1.0)/mu
+    inv_mu = 1f0/mu
+    inv_xm = 1f0/xm
+    fun = function calc_krw(x::Float32)
+        #x = clamp(x,xw,xo1)
+        #@fastmath
+        krw = (x-xw)*inv_xm
+        krw = krw^n
+        krw = clamp(krw, 0f0, 1f0)
+        krw = alp*inv_mu*krw
+        return krw
     end
 
     dfun = function calc_dkrw(x, pwr = n, coef = alp)
@@ -125,7 +132,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         @inbounds while flag
             k+=1
             krw .= fkrp.w.(Sw0i)
-            kro .= fkrp.o.(1f0 .- Sw0i)
+            kro .= 1f0 .- Sw0i
+            kro .= fkrp.o.(kro)
             bale .= 1 ./(krw.+kro)
 
             Tw[fp] = vkrwr#.*baler
@@ -188,13 +196,18 @@ function make_gdm_prop_sat(;mu_o = 1f0, mu_w = 1f0)
     Swaq = 1f0;
     Sw0 = 0f0;
 
-    mu = (o = mu_o, w = mu_w)
+    mu = (o = Float32(mu_o), w = Float32(mu_w))
     xo = 0f0;
     xw = 0f0;
     n_oil = 1# - степень фазовой нефть
     n_wather = 1# - степень фазовой вода
     fkrw, fdkrw = make_calc_krw(n_wather, 1f0, xo, xw, mu.w)
     fkro, fdkro = make_calc_krw(n_oil, 1f0, xw, xo, mu.o)
+    fkrp = FKR(fkrw, fkro)
+    return (bet = bet, Swaq = Swaq, Sw0 = Sw0, fkrp = fkrp)
+end
 
-    return (bet = bet, Swaq = Swaq, Sw0 = Sw0, fkrp = (w = fkrw, o = fkro))
+struct FKR
+    w::Function
+    o::Function
 end
