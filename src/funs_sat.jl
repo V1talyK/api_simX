@@ -27,13 +27,22 @@ function make_calc_krw(n::Int64, alp::Float32, xo::Float32, xw::Float32, mu::Flo
     xo1 = 1f0-xo
     inv_mu = 1f0/mu
     inv_xm = 1f0/xm
+
+    xw1 = xw
+    n1 = n
+    alp1 = alp
     fun = function calc_krw(x::Float32)
         #x = clamp(x,xw,xo1)
         #@fastmath
-        krw = (x-xw)*inv_xm
-        krw = krw^n
+        # @timeit to1 "krw2_2"  krw = (x-xw)*inv_xm
+        # @timeit to1 "krw2_3"  krw = krw^n
+        # @timeit to1 "krw2_4"  krw = clamp(krw, 0f0, 1f0)
+        # @timeit to1 "krw2_5"  krw = alp*inv_mu*krw
+        #@fastmath
+        krw = (x-xw1)*inv_xm
+        krw = krw^n1
         krw = clamp(krw, 0f0, 1f0)
-        krw = alp*inv_mu*krw
+        krw = alp1*inv_mu*krw
         return krw
     end
 
@@ -74,7 +83,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
     bbw = zeros(nc)
     krw = zeros(Float32, nc)
     kro = zeros(Float32, nc)
-    AWP = zeros(nc)
+    AWP = zeros(Float32, nc)
     dPaq = zeros(Float32, length(sbi))
     PM0 = zeros(nc); PM0 .= gdm_prop.P0;
 
@@ -105,7 +114,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         flag = true
 
         AGP .= .*(AG,dP)
-        AWP = accumarray(r, abs.(AGP))./2
+        accumarray!(AWP, r, abs.(AGP))
+        AWP.=AWP./2
         AWP[w1] *= 2
         alpt, alpi = findmax(AWP.*Δt./prp.Vp)
         alp0 = 1/alpt
@@ -131,9 +141,16 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
         @inbounds while flag
             k+=1
+            @timeit to1 "krw1"  begin
             krw .= fkrp.w.(Sw0i)
             kro .= 1f0 .- Sw0i
             kro .= fkrp.o.(kro)
+            end
+            @timeit to1 "krw2"  for i1 = 1:nc
+                @timeit to1 "krw2_1"  krw[i1] = fkrp.w(Sw0i[i1])
+                kro[i1] = 1f0 - Sw0i[i1]
+                kro[i1] = fkrp.o(kro[i1])
+            end
             bale .= 1 ./(krw.+kro)
 
             Tw[fp] = vkrwr#.*baler
@@ -144,8 +161,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
             #println(mn)
 
-            TAGP .= .*(Tw,AGP)
-            accumarray!(AWP, r, TAGP)
+            @timeit to1 "s_01"  TAGP .= Tw.*AGP
+            @timeit to1 "s0"  accumarray!(AWP, r, TAGP)
             #A2[sbi] .= view(A2,sbi) .+ sbv.*view(GM,sbi)
             A2 .= prp.eVp.*Sw0i.*(Pt .- PM0)#./alp;
 
@@ -160,11 +177,19 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             bbw[w1P] .= krw[w1P].*view(qt,prodI).*bale[w1P]
             #PF.updatesp!(Aw,1:nc,1:nc,A2)
             #println("www=",sum(krw))
-            AWP .= AWP .+A2
-            #println("www=",sum(kro))
-            AWP .= AWP.+bbw
-            AWP .= AWP.- bw
-            AWP .= AWP./prp.Vp
+            # @timeit to1 "s1"  begin
+            # AWP .= AWP .+A2
+            # #println("www=",sum(kro))
+            # AWP .= AWP.+bbw
+            # AWP .= AWP.- bw
+            # AWP .= AWP./prp.Vp
+            # end
+            @timeit to1 "s11"  for i1 = 1:nc
+                AWP[i1] = AWP[i1] + A2[i1]
+                AWP[i1] = AWP[i1] + bbw[i1]
+                AWP[i1] = AWP[i1] - bw[i1]
+                AWP[i1] = AWP[i1]/prp.Vp[i1]
+            end
             #wer
             cum_Δt+=alp
             # println("t=$t, k=$k")

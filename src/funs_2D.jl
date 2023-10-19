@@ -133,7 +133,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         ACL = cholesky(-A)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
-        for t=1:nt
+        for t=1:10#nt
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
             stream_flag .= view(p0,view(rc,:,1)) .< view(p0,view(rc,:,2))
@@ -166,7 +166,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
             qwc[:,t] .= qw[:,t]
-            SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
+            @timeit to1 "sat"  SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
         end
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW, AAr = AA1)
         return rsl
