@@ -27,3 +27,14 @@ function accumarray!(A, subs, val)
         @inbounds A[subs[i]] += val[i]
     end
 end
+
+function gen_rand_qw(nw, nt)
+    qw = zeros(nw, nt)
+    for i=1:nw
+        il = sort(unique(vcat(1,nt,rand(1:nt,7))))
+        for k = 1:length(il)-1
+            qw[i,il[k]:il[k+1]] .= rand()
+        end
+    end
+    return qw
+end

@@ -95,7 +95,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     qwc = zeros(nw,nt)
     pplcBt = zeros(Float32, nw)
     GM = ones(Float32, nc);
-    Mbt = ones(Float32, nc); Mbt .= satc.fkrp.w.(satc.Sw0i).+satc.fkrp.o.(1f0 .- satc.Sw0i)
+    Mbt = ones(Float32, nc); Mbt .= satc.fkrw.(satc.Sw0i).+satc.fkro.(1f0 .- satc.Sw0i)
     Tp = zeros(Float32, size(rc,1))
     bb = zeros(Float32,nc+nw)
 
@@ -133,7 +133,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         ACL = cholesky(-A)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
-        for t=1:10#nt
+        for t=1:2#nt
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
             stream_flag .= view(p0,view(rc,:,1)) .< view(p0,view(rc,:,2))
@@ -148,7 +148,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             Tpa[bnd_stream_flag] = view(Mbt[bnd_ind], bnd_stream_flag)
             # println(satc.fkrp.w.(ones(length(count(.!bnd_stream_flag)))))
             # println(Tpa[.!bnd_stream_flag])
-            Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(Float32, count(.!bnd_stream_flag)))
+            Tpa[.!bnd_stream_flag] = satc.fkrw.(ones(Float32, count(.!bnd_stream_flag)))
 
             updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
             ACL = cholesky(-A)
@@ -166,7 +166,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
             qwc[:,t] .= qw[:,t]
-            @timeit to1 "sat"  SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
+            SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
         end
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW, AAr = AA1)
         return rsl

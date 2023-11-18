@@ -42,7 +42,7 @@ function make_calc_krw(n::Int64, alp::Float32, xo::Float32, xw::Float32, mu::Flo
         krw = (x-xw1)*inv_xm
         krw = krw^n1
         krw = clamp(krw, 0f0, 1f0)
-        krw = alp1*inv_mu*krw
+        krw::Float32 = alp1*inv_mu*krw
         return krw
     end
 
@@ -60,7 +60,10 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
     Sw = zeros(Float32, nc, nt);  Sw.=gdm_sat.Sw0;
     Sw0 = zeros(Float32, nc);     Sw0 .= gdm_sat.Sw0
-    fkrp = gdm_sat.fkrp;
+
+    fkrp::FKR = getproperty(gdm_sat,:fkrp);
+    fkrw::Function = getproperty(fkrp,:w);
+    fkro::Function = getproperty(fkrp,:o);
 
     r = view(grd.rc,:,1)
     c = view(grd.rc,:,2)
@@ -141,16 +144,15 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
         @inbounds while flag
             k+=1
-            @timeit to1 "krw1"  begin
-            krw .= fkrp.w.(Sw0i)
-            kro .= 1f0 .- Sw0i
-            kro .= fkrp.o.(kro)
+            #@timeit to1 "krw1"  begin
+            #krw .= fkrw.(Sw0i)
+            #kro .= 1f0 .- Sw0i
+            #kro .= fkro.(kro)
+            @inbounds for i = 1:nc
+                krw[i] = fkrw(Sw0i[i])
+                kro[i] = fkro(1f0 - Sw0i[i])
             end
-            @timeit to1 "krw2"  for i1 = 1:nc
-                @timeit to1 "krw2_1"  krw[i1] = fkrp.w(Sw0i[i1])
-                kro[i1] = 1f0 - Sw0i[i1]
-                kro[i1] = fkrp.o(kro[i1])
-            end
+
             bale .= 1 ./(krw.+kro)
 
             Tw[fp] = vkrwr#.*baler
@@ -161,8 +163,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
             #println(mn)
 
-            @timeit to1 "s_01"  TAGP .= Tw.*AGP
-            @timeit to1 "s0"  accumarray!(AWP, r, TAGP)
+            TAGP .= Tw.*AGP
+            accumarray!(AWP, r, TAGP)
             #A2[sbi] .= view(A2,sbi) .+ sbv.*view(GM,sbi)
             A2 .= prp.eVp.*Sw0i.*(Pt .- PM0)#./alp;
 
@@ -184,7 +186,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             # AWP .= AWP.- bw
             # AWP .= AWP./prp.Vp
             # end
-            @timeit to1 "s11"  for i1 = 1:nc
+            #@timeit to1 "s11"
+            for i1 = 1:nc
                 AWP[i1] = AWP[i1] + A2[i1]
                 AWP[i1] = AWP[i1] + bbw[i1]
                 AWP[i1] = AWP[i1] - bw[i1]
@@ -229,10 +232,17 @@ function make_gdm_prop_sat(;mu_o = 1f0, mu_w = 1f0)
     fkrw, fdkrw = make_calc_krw(n_wather, 1f0, xo, xw, mu.w)
     fkro, fdkro = make_calc_krw(n_oil, 1f0, xw, xo, mu.o)
     fkrp = FKR(fkrw, fkro)
-    return (bet = bet, Swaq = Swaq, Sw0 = Sw0, fkrp = fkrp)
+    return GDMS(bet, Swaq, Sw0, fkrp)
 end
 
 struct FKR
     w::Function
     o::Function
+end
+
+struct GDMS
+    bet::Float32
+    Swaq::Float32
+    Sw0::Float32
+    fkrp::FKR
 end
