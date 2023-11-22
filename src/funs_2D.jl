@@ -133,7 +133,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         ACL = cholesky(-A)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
-        for t=1:2#nt
+        for t=1:5#nt
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
             stream_flag .= view(p0,view(rc,:,1)) .< view(p0,view(rc,:,2))
@@ -151,7 +151,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             Tpa[.!bnd_stream_flag] = satc.fkrw.(ones(Float32, count(.!bnd_stream_flag)))
 
             updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
-            ACL = cholesky(-A)
+            cholesky!(ACL,-A)
 
             Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
             AA1[t] = rAdf(-A, Tpa1, λbc)
@@ -202,10 +202,24 @@ function make_grid(nx,ny,Lx,Ly)
      Y = getindex.(XY,2)
      rc = make_rc(nx,ny);
 
+     rc_set = Vector{Array{Int64,1}}(undef,grd.nc);
+     rc_ind = Vector{Array{Int64,1}}(undef,grd.nc);
+     for i =1:nc
+         rc_set[i] = zeros(Int64,0)
+         rc_ind[i] = zeros(Int64,0)
+     end
+     for i in 1:length(rc[:,1])
+         if rc[i,1]>rc[i,2]
+             push!(rc_set[rc[i,1]], rc[i,2])
+             push!(rc_ind[rc[i,1]], i)
+         end
+     end
+
      irc = findall(.|(rc[:,1].<=nx,rc[:,1].>nx*(ny-1),mod.(rc[:,1],nx).==1,mod.(rc[:,1],ny).==0))
      λbi = sort(unique(rc[irc,1]))
 
-     return (nc = nc, nx = nx, ny = ny, dx=dx, ds=ds, X = X, Y=Y, rc = rc, λbi=λbi)
+     return (nc = nc, nx = nx, ny = ny, dx=dx, ds=ds, X = X, Y=Y, rc = rc, λbi=λbi,
+            rc_set = rc_set, rc_ind = rc_ind)
 end
 
 function make_rc(nx,ny)

@@ -43,6 +43,7 @@ function make_calc_krw(n::Int64, alp::Float32, xo::Float32, xw::Float32, mu::Flo
         krw = krw^n1
         krw = clamp(krw, 0f0, 1f0)
         krw::Float32 = alp1*inv_mu*krw
+        #krw = 1f0
         return krw
     end
 
@@ -67,6 +68,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
 
     r = view(grd.rc,:,1)
     c = view(grd.rc,:,2)
+    rcs = grd.rc_set
+    rci = grd.rc_ind
 
     Tw = zeros(Float32, length(r))
     bw = zeros(Float32, nc)
@@ -124,6 +127,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         alp0 = 1/alpt
         #println(alpt)
         alp0 = clamp(alp0,0,1)
+        alp = alp0/4
 
         vkrwr = view(krw,rfp)
         vkrwc = view(krw,cfp)
@@ -142,31 +146,36 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         Sw00 = copy(Sw0i)
         Sw00i = copy(Sw0i)
 
-        @inbounds while flag
+        @timeit to1 "while_flag"  @inbounds while flag
             k+=1
-            #@timeit to1 "krw1"  begin
-            #krw .= fkrw.(Sw0i)
-            #kro .= 1f0 .- Sw0i
-            #kro .= fkro.(kro)
-            @inbounds for i = 1:nc
-                krw[i] = fkrw(Sw0i[i])
+            AWP .= 0.0
+            @timeit to1 "krw1"  @inbounds for i = 1:nc
+                Sw_temp = Sw0i[i]
+                krw[i] = fkrw(Sw_temp)
                 kro[i] = fkro(1f0 - Sw0i[i])
+                bale[i] = 1f0/(krw[i]+kro[i])
+                A2[i] = prp.eVp[i]*Sw0i[i]*(Pt[i] - PM0[i])#./alp;
+
+                for (kj,j) in enumerate(rcs[i])
+                    dP1 = Pt[i] - Pt[j]
+                    sdp = sign(dP1)
+                    if sdp==1
+                        trw_temp = krw[i]
+                        AWP[i] += dP1*trw_temp*AG[rci[i][kj]]
+                    elseif sdp==-1
+                        trw_temp = krw[j]
+                        AWP[j] += dP1*trw_temp*AG[rci[i][kj]]
+                    end
+
+                end
             end
 
-            bale .= 1 ./(krw.+kro)
+            #Tw[fp] = vkrwr#.*baler
+            #Tw[bp] = vkrwc#.*balec
 
-            Tw[fp] = vkrwr#.*baler
-            Tw[bp] = vkrwc#.*balec
-            mn = bale[alpi]*krw[alpi]
-            mn = clamp(mn,0.01,1)
-            alp = alp0/4
-
-            #println(mn)
-
-            TAGP .= Tw.*AGP
-            accumarray!(AWP, r, TAGP)
+            #TAGP .= Tw.*AGP
+            #accumarray!(AWP, r, TAGP)
             #A2[sbi] .= view(A2,sbi) .+ sbv.*view(GM,sbi)
-            A2 .= prp.eVp.*Sw0i.*(Pt .- PM0)#./alp;
 
             bw[sbi] .= sbv[sbi].*view(GM,sbi)
             bw_aq[bfl] = view(bw,view(sbi,bfl)).*1 .*view(bale,view(sbi,bfl))
