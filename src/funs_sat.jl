@@ -146,10 +146,10 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         Sw00 = copy(Sw0i)
         Sw00i = copy(Sw0i)
 
-        @timeit to1 "while_flag"  @inbounds while flag
+        @inbounds while flag
             k+=1
             AWP .= 0.0
-            @timeit to1 "krw1"  @inbounds for i = 1:nc
+            @inbounds for i = 1:nc
                 Sw_temp = Sw0i[i]
                 krw[i] = fkrw(Sw_temp)
                 kro[i] = fkro(1f0 - Sw0i[i])
@@ -160,11 +160,9 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
                     dP1 = Pt[i] - Pt[j]
                     sdp = sign(dP1)
                     if sdp==1
-                        trw_temp = krw[i]
-                        AWP[i] += dP1*trw_temp*AG[rci[i][kj]]
-                    elseif sdp==-1
-                        trw_temp = krw[j]
-                        AWP[j] += dP1*trw_temp*AG[rci[i][kj]]
+                        AWP[i] += dP1*krw[i]*AG[rci[i][kj]]
+                    #elseif sdp==-1
+                        AWP[j] -= dP1*krw[i]*AG[rci[i][kj]]
                     end
 
                 end

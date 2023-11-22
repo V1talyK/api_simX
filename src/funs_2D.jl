@@ -132,8 +132,9 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,prp.eVp)
         ACL = cholesky(-A)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
+        CL = make_CL_in_julia(ACL, Threads.nthreads())
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
-        for t=1:5#nt
+        @timeit to1 "trloop" for t=1:25#nt
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
             stream_flag .= view(p0,view(rc,:,1)) .< view(p0,view(rc,:,2))
@@ -150,13 +151,12 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             # println(Tpa[.!bnd_stream_flag])
             Tpa[.!bnd_stream_flag] = satc.fkrw.(ones(Float32, count(.!bnd_stream_flag)))
 
-            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
-            cholesky!(ACL,-A)
+            @timeit to1 "1" updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
+            @timeit to1 "2" cholesky!(ACL,-A)
 
-            Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
-            AA1[t] = rAdf(-A, Tpa1, λbc)
-            CL = make_CL_in_julia(ACL, Threads.nthreads())
-            updateCL!(CL, ACL)
+            @timeit to1 "3" Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
+            @timeit to1 "4" AA1[t] = rAdf(-A, Tpa1, λbc)
+            @timeit to1 "6" updateCL!(CL, ACL)
 
             bb .= makeB(nc,nw,Paq,T,well,qw[:,t],λbc,p0,prp.eVp);
             PM[:,t] = ACL\bb;
@@ -166,7 +166,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
             qwc[:,t] .= qw[:,t]
-            SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
+            @timeit to1 "sat" SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
         end
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW, AAr = AA1)
         return rsl
@@ -202,17 +202,17 @@ function make_grid(nx,ny,Lx,Ly)
      Y = getindex.(XY,2)
      rc = make_rc(nx,ny);
 
-     rc_set = Vector{Array{Int64,1}}(undef,grd.nc);
-     rc_ind = Vector{Array{Int64,1}}(undef,grd.nc);
+     rc_set = Vector{Array{Int64,1}}(undef,nc);
+     rc_ind = Vector{Array{Int64,1}}(undef,nc);
      for i =1:nc
          rc_set[i] = zeros(Int64,0)
          rc_ind[i] = zeros(Int64,0)
      end
      for i in 1:length(rc[:,1])
-         if rc[i,1]>rc[i,2]
+         #if rc[i,1]>rc[i,2]
              push!(rc_set[rc[i,1]], rc[i,2])
              push!(rc_ind[rc[i,1]], i)
-         end
+         #end
      end
 
      irc = findall(.|(rc[:,1].<=nx,rc[:,1].>nx*(ny-1),mod.(rc[:,1],nx).==1,mod.(rc[:,1],ny).==0))

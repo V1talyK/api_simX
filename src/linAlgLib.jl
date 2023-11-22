@@ -22,8 +22,8 @@ function make_CL_in_julia(ACL, nth = 1)
 end
 
 function updateCL!(CL, ACL)
-    CL.L.=sparse(ACL.L)
-    CL.U.=copy(CL.L')
+    @timeit to1 "6.1" CL.L.=sparse(ACL.L)
+    @timeit to1 "6.2" CL.U.=copy(CL.L')
 end
 
 function ldiv_cl!(x,

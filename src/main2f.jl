@@ -45,7 +45,7 @@ ppo = (cumsum(sum(abs, ifelse.(qw.<0,qw,0.), dims=1)[:]).*gdm_prop.dt)./sum(prp.
 lineplot(rsl.ppl[5,:])|>println
 lineplot(wtc[5,:])|>println
 lineplot(dpo, kin, xlabel= "ППО", ylabel="КИН")|>println
-heatmap(reshape(rsl.PM[:,end], grd.nx, grd.ny))|>println
-heatmap(reshape(rsl.SW[:,end], grd.nx, grd.ny))|>println
+heatmap(reshape(rsl.PM[:,25], grd.nx, grd.ny))|>println
+heatmap(reshape(rsl.SW[:,25], grd.nx, grd.ny))|>println
 
 #@profiler sim_calc(qw = qw)
