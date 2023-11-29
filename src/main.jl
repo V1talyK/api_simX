@@ -19,3 +19,10 @@ rsl = sim_calc(qw = qw)
 
 lineplot(rsl.ppl[1,:])|>println
 heatmap(reshape(rsl.PM[:,1], grd.nx, grd.ny))|>println
+
+uf = falses(nw, nt);
+uf[[2,4,5,6,8],:] .= true;
+pw = zeros(nw, nt);
+pw[[2,4,5,6,8],:] .= 5f0;
+
+rsl = sim_calc(qw = qw, uf = uf, pw = pw)
