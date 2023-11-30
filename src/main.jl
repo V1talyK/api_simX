@@ -23,8 +23,9 @@ heatmap(reshape(rsl.PM[:,1], grd.nx, grd.ny))|>println
 
 uf = falses(nw, nt);
 uf[[2,4,5,6,8],:] .= true;
+qw[[1,3,7,9],:] .= -2;
 pw = zeros(nw, nt);
-#pw[[2,4,5,6,8],:] .= 5f0;
-pw[[2,4,5,6,8],:] .= rsl.pw[[2,4,5,6,8],:];
+pw[[2,4,5,6,8],:] .= 5f0;
+#pw[[2,4,5,6,8],:] .= rsl.pw[[2,4,5,6,8],:];
 
 rsl = sim_calc(qw = qw, uf = uf, pw = pw)
