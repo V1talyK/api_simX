@@ -65,7 +65,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
             qwc[:,t] .= WI.*T[w1].*(p0[w1].-pw[:,t])
-            println(pwc[:,t],"  ",p0[w1])
+            #println(pwc[:,t],"  ",p0[w1])
             qwc[.!uf[:,t],t] .= qw[.!uf[:,t],t]
             #println(sum(abs,pplcBt.-temp_ppl))
 
@@ -119,6 +119,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
     qw0 = zeros(Float32, nw, nt)
     pw0 = ones(Float32, nw, nt)
+    uf0 = falses(nw, nt)
     kp0 = prp.kp
     he0 = prp.he
     stream_flag = trues(length(Tp))
@@ -128,12 +129,11 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
     AA1 = Vector(undef, nt)
 
-    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0)
+    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0)
         GM.=kp.*he.*10. *8.64*1e-3;
         AG, T = makeAG(kp.*10. *8.64*1e-3,he)
         p0 .= P0
-
-        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,prp.eVp)
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,uf,prp.eVp)
         ACL = cholesky(-A)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
@@ -184,7 +184,7 @@ function make_gdm_prop()
     Paq = 10;
     P0 = 10;
     dt = 30.5;
-    λb = 1;
+    λb = 1.0;
     return (bet = bet, Paq = Paq, P0 = P0, dt = dt, λb = λb)
 end
 
