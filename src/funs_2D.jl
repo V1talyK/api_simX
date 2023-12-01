@@ -1,4 +1,3 @@
-
 function make_sim(grd, gdm_prop, well, prp, nt)
     nc = grd.nc
     nw = maximum(getindex.(well,2))
@@ -154,7 +153,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             # println(Tpa[.!bnd_stream_flag])
             Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(Float32, count(.!bnd_stream_flag)))
 
-            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,prp.eVp)
+            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,uf,prp.eVp)
             ACL = cholesky(-A)
 
             Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
@@ -162,16 +161,18 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
 
-            bb .= makeB(nc,nw,Paq,T,well,qw[:,t],λbc,p0,prp.eVp);
+            bb .= makeB(nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,p0,WI.*WTp,prp.eVp);
             PM[:,t] = ACL\bb;
             PM[:,t] .= .-PM[:,t]
             p0 .= view(PM,1:nc,t)
             pwc[:,t] = view(PM,nc+1:nc+nw,t)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
-            qwc[:,t] .= qw[:,t]
+            qwc[:,t] .= WI.*T[w1].*(p0[w1].-pw[:,t])
+            qwc[.!uf[:,t],t] .= qw[.!uf[:,t],t]
             SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
         end
+        pwc[uf].=pw[uf]
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW, AAr = AA1)
         return rsl
     end

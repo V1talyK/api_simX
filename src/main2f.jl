@@ -1,6 +1,8 @@
 push!(LOAD_PATH, Base.source_dir())
 
 using ITPM_SimX
+using Revise
+
 using NearestNeighbors, UnicodePlots, LinearAlgebra, SuiteSparse, SparseArrays, Statistics
 include("libs.jl")
 include("funs_2D.jl")
@@ -49,3 +51,9 @@ heatmap(reshape(rsl.PM[:,end], grd.nx, grd.ny))|>println
 heatmap(reshape(rsl.SW[:,end], grd.nx, grd.ny))|>println
 
 #@profiler sim_calc(qw = qw)
+uf = falses(nw, nt);
+uf[[2,4,5,6,8],:] .= true;
+qw[[1,3,7,9],:] .= -2;
+pw = zeros(nw, nt);
+pw[[2,4,5,6,8],:] .= 5f0;
+rsl = sim_calc(qw = qw, uf = uf, pw = pw)
