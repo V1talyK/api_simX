@@ -182,10 +182,10 @@ end
 
 function make_gdm_prop()
     bet = 1e-4;
-    Paq = 10;
-    P0 = 10;
+    Paq = 20;
+    P0 = 20;
     dt = 30.5;
-    λb = 1.0;
+    λb = 2.0;
     return (bet = bet, Paq = Paq, P0 = P0, dt = dt, λb = λb)
 end
 
