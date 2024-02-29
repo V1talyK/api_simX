@@ -11,12 +11,12 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     dt = gdm_prop.dt
 
     λbc = zeros(nc);
-    p0 = zeros(Float32, nc);
     PM = zeros(Float32, nc+nw,nt)
+    PM0 = zeros(Float32, nc+nw)
     pwc = zeros(nw,nt)
     pplc = zeros(nw,nt)
     qwc = zeros(nw,nt)
-    pplcBt = zeros(Float32, nw)
+
     GM = ones(Float32, nc);
     bb = zeros(Float32,nc+nw)
 
@@ -47,27 +47,16 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         ACL = cholesky(-A)
         CL = make_CL_in_julia(ACL, Threads.nthreads())
         updateCL!(CL, ACL)
-        p0 .= P0
+        PM0 .= P0
         AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
         AA1 = rAdf(ACL, T, λbc)
 
         for t=1:nt
-            bb .= makeB(nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,p0,WI,prp.eVp);
-            #bb1 = rBdf(bb)
-            #temp_ppl = -AA1\bb1;
-
-            PM[:,t] = ACL\bb;
-            PM[:,t] .= .-PM[:,t]
-            p0 .= view(PM,1:nc,t)
-            pwc[:,t] = view(PM,nc+1:nc+nw,t)
-            pplcBt .= tM.M2M*p0;
-            pplc[:,t] .= pplcBt;
-            qwc[:,t] .= WI.*T[w1].*(p0[w1].-pw[:,t])
-            #println(pwc[:,t],"  ",p0[w1])
-            qwc[.!uf[:,t],t] .= qw[.!uf[:,t],t]
-            #println(sum(abs,pplcBt.-temp_ppl))
-
+            PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, ACL, bb,
+                            nc,nw,Paq,T,well,
+                            view(uf,:,t),view(qw,:,t), view(pw,:,t),
+                            λbc,WI, prp.eVp, tM, w1)
         end
         pwc[uf].=pw[uf]
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], AAr = AA1)
@@ -75,6 +64,22 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     end
 
     return msim
+end
+
+function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
+    WI, eVp, tM, w1)
+
+    bb .= makeB(nc,nw,Paq,T,well,uft,qwt,pwt,λbc, view(PM0,1:nc), WI, eVp);
+
+    PM0 .= ACL\bb;
+    PM0 .= .-PM0
+    pwc = view(PM0,nc+1:nc+nw)
+    pplc = tM.M2M*view(PM0,1:nc);
+    qwc = WI.*view(T,w1).*(view(PM0,w1).-pwt)
+
+    qwc[.!uft] .= qwt[.!uft]
+    #println(sum(abs,pplcBt.-temp_ppl))
+    return PM0, pwc, pplc, qwc
 end
 
 function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
