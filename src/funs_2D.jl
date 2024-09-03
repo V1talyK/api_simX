@@ -185,12 +185,14 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     return msim
 end
 
-function make_gdm_prop()
-    bet = 1e-4;
-    Paq = 20;
+function make_gdm_prop(;bet0 = 1e-4,
+                        Paq0 = 20,
+                        λb0 = 2.0)
+    bet = bet0;
+    Paq = Paq0;
     P0 = 20;
     dt = 30.5;
-    λb = 2.0;
+    λb = λb0;
     return (bet = bet, Paq = Paq, P0 = P0, dt = dt, λb = λb)
 end
 
@@ -233,12 +235,15 @@ function make_gdm(;he_init = 1.,
                    nx_init = 21,
                    ny_init = 21,
                    Lx_init = 1000,
-                   Ly_init = 1000)
+                   Ly_init = 1000,
+                   bet = 1e-4,
+                   Paq = 20,
+                   λb = 2.0)
     #Создаём всё что надо
     nx, ny, nt = nx_init, ny_init, nt_init;
     Lx, Ly = Lx_init, Ly_init;
     grd = make_grid(nx,ny,Lx,Ly); #кол-во ячеек x, кол-во ячеек y, размер X, размер Y
-    gdm_p = make_gdm_prop()
+    gdm_p = make_gdm_prop(bet0 = bet, Paq0 = Paq, λb0 = λb)
 
     kp = kp_init*ones(grd.nx,grd.ny);   kp = kp[:];
     he = he_init*ones(grd.nx,grd.ny);    he = he[:];
