@@ -36,14 +36,18 @@ function make_sim(grd, gdm_prop, well, prp, nt)
 
     qw0 = zeros(Float32, nw, nt)
     pw0 = ones(Float32, nw, nt)
+    wc0 = ones(Float32, nw, nt)
     uf0 = falses(nw, nt)
     kp0 = prp.kp
     he0 = prp.he
 
-    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0)
+
+    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0)
         GM.=kp.*he.*10. *8.64*1e-3;
         AG, T = makeAG(kp.*10. *8.64*1e-3,he)
-        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,uf,prp.eVp)
+        wct = view(wc, w2, 1)
+        uft = view(uf, :, 1)
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
         ACL = cholesky(-A)
         CL = make_CL_in_julia(ACL, Threads.nthreads())
         updateCL!(CL, ACL)
@@ -53,10 +57,11 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         AA1 = rAdf(ACL, T, λbc)
 
         for t=1:nt
+            wct = view(wc, w2, t)
             PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, ACL, bb,
                             nc,nw,Paq,T,well,
                             view(uf,:,t),view(qw,:,t), view(pw,:,t),
-                            λbc,WI, prp.eVp, tM, w1)
+                            λbc, WI, wct, prp.eVp, tM, w1)
         end
         pwc[uf].=pw[uf]
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], AAr = AA1)
@@ -67,17 +72,17 @@ function make_sim(grd, gdm_prop, well, prp, nt)
 end
 
 function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
-    WI, eVp, tM, w1)
+    WI, wct, eVp, tM, w1)
 
-    bb .= makeB(nc,nw,Paq,T,well,uft,qwt,pwt,λbc, view(PM0,1:nc), WI, eVp);
+    makeB!(bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc, view(PM0,1:nc), WI, wct, eVp);
 
     PM0 .= ACL\bb;
     PM0 .= .-PM0
     pwc = view(PM0,nc+1:nc+nw)
     pplc = tM.M2M*view(PM0,1:nc);
-    qwc = WI.*view(T,w1).*(view(PM0,w1).-pwt)
-
-    qwc[.!uft] .= qwt[.!uft]
+    qwc = WI.*view(T,w1).*(view(PM0,w1).-pwt).*wct
+    nuft = .!uft
+    qwc[nuft] .= qwt[nuft]
     #println(sum(abs,pplcBt.-temp_ppl))
     return PM0, pwc, pplc, qwc
 end
@@ -166,7 +171,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
 
-            bb .= makeB(nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,p0,WI.*WTp,prp.eVp);
+            makeB!(bb, nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,p0,WI.*WTp,prp.eVp);
             PM[:,t] = ACL\bb;
             PM[:,t] .= .-PM[:,t]
             p0 .= view(PM,1:nc,t)
@@ -312,19 +317,22 @@ function makeA(r,c,nc,nw,w1,w2)
 end
 
 
-function makeB(nx,nw,Pk,T,well,uf,qw,pw,λb,p0,WI, eV=0)
-    b = zeros(nx+nw);
+function makeB!(b, nx,nw,Pk,T,well,uf,qw,pw,λb,p0,WI, wct, eV=0)
+    b .= zero(eltype(b));
     wAi = nx+1:nx+nw
     b[1:nx] = .-T.*λb.*Pk
     # for (k,v) in enumerate(zip(well,qw))
     #     b[v[1][1]] = b[v[1][1]] + v[2]
     # end
-    b[1:nx].=view(b,1:nx)-eV.*p0
+    b[1:nx].=view(b,1:nx).-eV.*p0
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
-    b[w1[uf[w2]]] .= b[w1[uf[w2]]] .- T[w1[uf[w2]]].*WI[uf[w2]].*pw[w2[uf[w2]]]
+    uff = uf[w2]
+    w1f = w1[uff]
+    PRDC = wct[uff].*T[w1f].*WI[uff]
+    b[w1f] .= b[w1f] .- PRDC.*pw[w2[uff]]
     b[wAi[.!uf]].=qw[.!uf]
-    return b
+    return nothing
 end
 
 function make_fun_AG(nc,rc,dx,ds)
@@ -347,16 +355,16 @@ function make_fun_AG(nc,r,c,dx,ds)
 end
 
 
-function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, uf, eV=0)
+function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, wct, uft, eV=0)
     updatesp!(A,r,c,AG);
     #println("---------")
     #println(issymmetric(A))
     A2 = zeros(nx)
     accumarray!(A2,r,AG)
     A2 .= A2 .+ T.*λb.+eV;
-    WIg = WI.*view(GM,w1)
+    WIg = WI.*view(GM,w1).*wct
     A2[w1] .= A2[w1] .+ WIg
-    A2[w1[uf[w2,1]]] .= A2[w1[uf[w2,1]]] .+ WIg[uf[w2,1]]
+    A2[w1[uft[w2]]] .= A2[w1[uft[w2]]] .+ WIg[uft[w2]]
     updatesp!(A,1:nx,1:nx,.-A2)
 
     updatesp!(A,nx+1:nx+nw,nx+1:nx+nw,.-WIg)

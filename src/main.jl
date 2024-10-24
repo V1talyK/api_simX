@@ -17,6 +17,8 @@ qw[[1,3,7,9],:] .= -abs.(qw[[1,3,7,9],:]).-1;
 qw[[2,4,5,6,8],:] .= abs.(qw[[2,4,5,6,8],:].+1)
 
 rsl = sim_calc(qw = qw)
+# @time sim_calc(qw = qw)
+# @profiler sim_calc(qw = qw)
 
 lineplot(rsl.ppl[1,:])|>println
 heatmap(reshape(rsl.PM[:,1], grd.nx, grd.ny))|>println
