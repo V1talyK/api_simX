@@ -128,6 +128,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
     qw0 = zeros(Float32, nw, nt)
     pw0 = ones(Float32, nw, nt)
+    wc0 = ones(Float32, nw, nt)
     uf0 = falses(nw, nt)
     kp0 = prp.kp
     he0 = prp.he
@@ -138,11 +139,13 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
     AA1 = Vector(undef, nt)
 
-    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0)
+    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0)
         GM.=kp.*he.*10. *8.64*1e-3;
         AG, T = makeAG(kp.*10. *8.64*1e-3,he)
         p0 .= P0
-        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,uf,prp.eVp)
+        wct = view(wc, w2, 1)
+        uft = view(uf, :, 1)
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct, uf,prp.eVp)
         ACL = cholesky(-A)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
@@ -163,7 +166,8 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             # println(Tpa[.!bnd_stream_flag])
             Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(Float32, count(.!bnd_stream_flag)))
 
-            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI.*WTp,uf,prp.eVp)
+            wct = view(wc, w2, t)
+            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI, WTp.*wct,uf,prp.eVp)
             ACL = cholesky(-A)
 
             Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
@@ -171,7 +175,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
 
-            makeB!(bb, nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,p0,WI.*WTp,prp.eVp);
+            makeB!(bb, nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,p0,WI.*WTp,wct, prp.eVp);
             PM[:,t] = ACL\bb;
             PM[:,t] .= .-PM[:,t]
             p0 .= view(PM,1:nc,t)
@@ -366,7 +370,6 @@ function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, wct, uft, eV=0)
     A2[w1] .= A2[w1] .+ WIg
     A2[w1[uft[w2]]] .= A2[w1[uft[w2]]] .+ WIg[uft[w2]]
     updatesp!(A,1:nx,1:nx,.-A2)
-
     updatesp!(A,nx+1:nx+nw,nx+1:nx+nw,.-WIg)
     updatesp!(A,w1,nx.+w2,WIg)
     updatesp!(A,nx.+w2,w1,WIg)

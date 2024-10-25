@@ -17,6 +17,9 @@ qw[[1,3,7,9],:] .= -abs.(qw[[1,3,7,9],:]).-1;
 qw[[2,4,5,6,8],:] .= abs.(qw[[2,4,5,6,8],:].+1)
 
 rsl = sim_calc(qw = qw)
+wc0 = ones(nw, nt)
+wc0[1, :] .= 2
+rsl1 = sim_calc(qw = qw, wc = wc0)
 # @time sim_calc(qw = qw)
 # @profiler sim_calc(qw = qw)
 
