@@ -2,6 +2,8 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     nc = grd.nc
     nw = length(unique(getindex.(well,2)))
     nwc = length(well)
+    w1 = getindex.(well,1)
+    w2 = getindex.(well,2)
 
     rc = grd.rc
     λbi = grd.λbi
@@ -23,15 +25,13 @@ function make_sim(grd, gdm_prop, well, prp, nt)
 
     λbc[λbi] .= gdm_prop.λb;
 
-    tM = (M2M = sparse(getindex.(well,2),getindex.(well,1),1,nw,nc),
-          M2Mw = sparse(getindex.(well,1),getindex.(well,2),1,nc+nw,nw))
+    dw = inv.(accumarray(w2,ones(length(w2))))[w2]
+    tM = (M2M = sparse(w2,w1,dw,nw,nc),
+          M2Mw = sparse(w1,w2,1,nc+nw,nw))
     actW = trues(nw,nt)
     ufl = falses(nw,nt)
 
     WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nwc)
-    w1 = getindex.(well,1)
-    w2 = getindex.(well,2)
-
     A, W1 = makeA(view(rc,:,1),view(rc,:,2),nc,nw,w1,w2)
     makeAG = make_fun_AG(grd.nc,grd.rc,grd.dx,grd.ds);
 
@@ -91,8 +91,10 @@ end
 
 function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     nc = grd.nc
-    nw = maximum(getindex.(well,2))
-
+    nw = length(unique(getindex.(well,2)))
+    nwc = length(well)
+    w1 = getindex.(well,1)
+    w2 = getindex.(well,2)
     rc = grd.rc
     bnd_ind = grd.λbi
     he = copy(prp.he)
@@ -116,12 +118,13 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
     λbc[bnd_ind] .= gdm_prop.λb;
 
-    tM = (M2M = sparse(getindex.(well,2),getindex.(well,1),1,nw,nc),
-          M2Mw = sparse(getindex.(well,1),getindex.(well,2),1,nc+nw,nw))
+    dw = inv.(accumarray(w2,ones(length(w2))))[w2]
+    tM = (M2M = sparse(w2,w1,dw,nw,nc),
+          M2Mw = sparse(w1,w2,1,nc+nw,nw))
     actW = trues(nw,nt)
     ufl = falses(nw,nt)
 
-    WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nw)
+    WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nwc)
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
 
@@ -149,7 +152,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         uft = view(uf, :, 1)
         updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct, uf,prp.eVp)
         ACL = cholesky(-A)
-        rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
+        rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, w2, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         for t=1:nt
             stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
@@ -184,7 +187,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             pwc[:,t] = view(PM,nc+1:nc+nw,t)
             pplcBt .= tM.M2M*p0;
             pplc[:,t] .= pplcBt;
-            qwc[:,t] .= WI.*T[w1].*(p0[w1].-pw[:,t])
+            accumarray!(view(qwc,:,t), w2, WI.*T[w1].*(p0[w1].-pw[w2,t]))
             qwc[.!uf[:,t],t] .= qw[.!uf[:,t],t]
             SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
         end
