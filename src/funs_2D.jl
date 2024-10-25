@@ -1,6 +1,7 @@
 function make_sim(grd, gdm_prop, well, prp, nt)
     nc = grd.nc
-    nw = maximum(getindex.(well,2))
+    nw = length(unique(getindex.(well,2)))
+    nwc = length(well)
 
     rc = grd.rc
     λbi = grd.λbi
@@ -27,7 +28,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     actW = trues(nw,nt)
     ufl = falses(nw,nt)
 
-    WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nw)
+    WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nwc)
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
 
@@ -53,15 +54,15 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         updateCL!(CL, ACL)
         PM0 .= P0
         AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
-        rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, nc)
-        AA1 = rAdf(ACL, T, λbc)
+        rAdf, rBdf = make_reduce_ma3x_dims(A, w1, w2, nc)
+        AA1 = rAdf(A, T, λbc)
 
         for t=1:nt
             wct = view(wc, w2, t)
             PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, ACL, bb,
                             nc,nw,Paq,T,well,
                             view(uf,:,t),view(qw,:,t), view(pw,:,t),
-                            λbc, WI, wct, prp.eVp, tM, w1)
+                            λbc, WI, wct, prp.eVp, tM, w1, w2)
         end
         pwc[uf].=pw[uf]
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], AAr = AA1)
@@ -72,7 +73,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
 end
 
 function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
-    WI, wct, eVp, tM, w1)
+    WI, wct, eVp, tM, w1, w2)
 
     makeB!(bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc, view(PM0,1:nc), WI, wct, eVp);
 
@@ -80,7 +81,8 @@ function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
     PM0 .= .-PM0
     pwc = view(PM0,nc+1:nc+nw)
     pplc = tM.M2M*view(PM0,1:nc);
-    qwc = WI.*view(T,w1).*(view(PM0,w1).-pwt).*wct
+    qwc = WI.*view(T,w1).*(view(PM0,w1).-pwt[w2]).*wct
+    qwc = accumarray(w2, qwc, nw)
     nuft = .!uft
     qwc[nuft] .= qwt[nuft]
     #println(sum(abs,pplcBt.-temp_ppl))
@@ -289,6 +291,15 @@ function make_Won(wxy,XY)
     return hcat(getindex.(idx,1),1:length(wxy))
 end
 
+function make_Won(wixy::Vector{Tuple{Int64, Tuple{Float64, Float64}}}, XY)
+    kdtree = KDTree(XY')
+    wi = getindex.(wixy,1)
+    wxy = getindex.(wixy,2)
+    point = hcat(getindex.(wxy,1), getindex.(wxy,2))'
+    idx, d = nn(kdtree, point)
+    return hcat(getindex.(idx,1),wi)
+end
+
 function make_M2M(grd, well)
     M2M = zeros(grd.nc,9)
     for (km,v) in enumerate(getindex.(well,1))
@@ -364,23 +375,27 @@ function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, wct, uft, eV=0)
     #println("---------")
     #println(issymmetric(A))
     A2 = zeros(nx)
+    W3 = zeros(nw)
     accumarray!(A2,r,AG)
     A2 .= A2 .+ T.*λb.+eV;
     WIg = WI.*view(GM,w1).*wct
     A2[w1] .= A2[w1] .+ WIg
     A2[w1[uft[w2]]] .= A2[w1[uft[w2]]] .+ WIg[uft[w2]]
     updatesp!(A,1:nx,1:nx,.-A2)
-    updatesp!(A,nx+1:nx+nw,nx+1:nx+nw,.-WIg)
+    accumarray!(W3, w2, WIg)
+    updatesp!(A,nx+1:nx+nw,nx+1:nx+nw, -W3)
     updatesp!(A,w1,nx.+w2,WIg)
     updatesp!(A,nx.+w2,w1,WIg)
     updatesp!(W1,w1,w2,WIg)
     return nothing
 end
 
-function make_reduce_ma3x_dims(ACL, w1, nc)
-    nw = length(w1)
-    aw1 = setdiff(1:nc+nw,w1)
-    aw2 = setdiff(1:nc,w1)
+function make_reduce_ma3x_dims(ACL, w1, w2, nc)
+    #nwc = length(w1)
+    nw = length(unique(w2))
+    w1f = indexin(unique(w2),w2)
+    aw1 = setdiff(1:nc+nw,w1f)
+    aw2 = setdiff(1:nc,w1f)
     Aaq = zeros(nc)
     #AA1 = A11 - (A22\Matrix(A12'))'*A21
     #bb1 = bb[w1] - (A22\Matrix(A12'))'*bb[aw1]
@@ -391,18 +406,19 @@ function make_reduce_ma3x_dims(ACL, w1, nc)
     #
     # AB12 = vcat(A12, v12')'
     # AB21 = hcat(A21, v12)
-    function rAdf(ACL, T, λbc)
-        AA = sparse(ACL)
-        A11 = AA[w1,w1];
+    function rAdf(A, T, λbc)
+        #AA = sparse(ACL)
+        AA = -A;
+        A11 = AA[w1f,w1f];
         A22 = AA[aw1,aw1];
-        A12 = AA[w1,aw1]
+        A12 = AA[w1f,aw1]
         A21 = AA[aw1,w1]
         Aaq[1:(nc-nw)] .= -T[aw2].*λbc[aw2]
         A22 = AA[aw1,aw1];
 
         A11 = vcat(hcat(A11,zeros(nw)),hcat(zeros(nw)',-sum(Aaq)))
-        A12 = vcat(AA[w1,aw1], Aaq')
-        A21 = hcat(AA[aw1,w1], Aaq)
+        A12 = vcat(AA[w1f,aw1], Aaq')
+        A21 = hcat(AA[aw1,w1f], Aaq)
         #A22
 
         #APA = vcat(hcat(A11, (T.*λbc)[w1]), hcat((T.*λbc)[w1]', sum(T.*λbc))) - (A22\Matrix(AB12))'*AB21
@@ -411,7 +427,7 @@ function make_reduce_ma3x_dims(ACL, w1, nc)
     end
     function rBdf(bb)
         #APA = vcat(hcat(A11, (T.*λbc)[w1]), hcat((T.*λbc)[w1]', sum(T.*λbc))) - (A22\Matrix(AB12))'*AB21
-        bb1 = bb[w1] - (A22\Matrix(A12'))'*bb[aw1]
+        bb1 = bb[w1f] - (A22\Matrix(A12'))'*bb[aw1]
         return bb1
     end
     return rAdf, rBdf

@@ -6,9 +6,10 @@ using Revise
 @info "Тестирование прямого расчёта симулятора"
 grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 0.5)
 
-wxy9 = collect(Iterators.product(x,x))[:]
+wxy9 = collect(zip(1:9,collect(Iterators.product(x,x))[:]))
+insert!(wxy9, 6, (5, (500, 600)))
 well = make_well(wxy9,grd)
-nw = length(well)
+nw = length(unique(getindex.(well,2)))
 
 sim_calc = make_sim(grd,gdm_prop, well, prp, nt)
 
@@ -20,8 +21,8 @@ rsl = sim_calc(qw = qw)
 wc0 = ones(nw, nt)
 wc0[1, :] .= 2
 rsl1 = sim_calc(qw = qw, wc = wc0)
-# @time sim_calc(qw = qw)
-# @profiler sim_calc(qw = qw)
+@btime sim_calc(qw = $qw)
+@profiler sim_calc(qw = qw)
 
 lineplot(rsl.ppl[1,:])|>println
 heatmap(reshape(rsl.PM[:,1], grd.nx, grd.ny))|>println
