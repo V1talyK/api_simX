@@ -245,6 +245,7 @@ end
 
 function make_gdm(;he_init = 1.,
                    kp_init = 0.2,
+                   mp_init = 0.2,
                    nt_init = 360,
                    nx_init = 21,
                    ny_init = 21,
@@ -261,14 +262,14 @@ function make_gdm(;he_init = 1.,
 
     kp = kp_init*ones(grd.nx,grd.ny);   kp = kp[:];
     he = he_init*ones(grd.nx,grd.ny);    he = he[:];
-    mp = 0.2*ones(grd.nx,grd.ny);    mp = mp[:];
+    mp = mp_init*ones(grd.nx,grd.ny);    mp = mp[:];
 
     #Эффективный поровый объём ячеек (упругоёмкость)
     eVp = gdm_p.bet.*he.*grd.ds.*grd.ds/gdm_p.dt;
     #Поровый объём ячеек
     Vp = he.*grd.ds.*grd.ds.*mp
 
-    prp = (kp = kp, he = he, eVp = eVp, Vp = Vp)
+    prp = (kp = kp, he = he, mp = mp, eVp = eVp, Vp = Vp)
 
     x = make_well_grid(grd, 0.2, 3)
     return grd, gdm_p, prp, x, nt
