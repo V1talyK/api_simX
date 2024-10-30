@@ -204,7 +204,7 @@ function make_gdm_prop(;bet0 = 1e-4,
                         λb0 = 2.0)
     bet = bet0;
     Paq = Paq0;
-    P0 = 20;
+    P0 = Paq0;
     dt = 30.5;
     λb = λb0;
     return (bet = bet, Paq = Paq, P0 = P0, dt = dt, λb = λb)
