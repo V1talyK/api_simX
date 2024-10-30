@@ -57,7 +57,17 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         rAdf, rBdf = make_reduce_ma3x_dims(A, w1, w2, nc)
         AA1 = rAdf(A, T, λbc)
 
+        uuf = !all(allunique.(eachrow(uf)))
+
         for t=1:nt
+            if uuf
+                uft = view(uf, :, t)
+                updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
+                ACL = cholesky(-A)
+                CL = make_CL_in_julia(ACL, Threads.nthreads())
+                updateCL!(CL, ACL)
+            end
+
             wct = view(wc, w2, t)
             PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, ACL, bb,
                             nc,nw,Paq,T,well,
