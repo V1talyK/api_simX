@@ -13,7 +13,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     P0 = gdm_prop.P0
     dt = gdm_prop.dt
 
-    λbc = zeros(nc);
+    λbc = zeros(Float32, nc);
     PM = zeros(Float32, nc+nw,nt)
     PM0 = zeros(Float32, nc+nw)
     pwc = zeros(nw,nt)
@@ -79,7 +79,35 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         return rsl
     end
 
-    return msim
+    function cIWC(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0)
+        #Расчёт матрицы связи скважин
+        GM.=kp.*he.*10. *8.64*1e-3;
+        AG, T = makeAG(kp.*10. *8.64*1e-3,he)
+        wct = view(wc, w2, 1)
+        uft = view(uf, :, 1)
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
+        ACL = cholesky(-A)
+        CL = make_CL_in_julia(ACL, Threads.nthreads())
+        updateCL!(CL, ACL)
+        PM0 .= P0
+        AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
+        rAdf, rBdf = make_reduce_ma3x_dims(A, w1, w2, nc)
+        AIW = rAdf(A, T, λbc)
+
+        # for t = 1:1
+        #     wct = view(wc, w2, t)
+        #     PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, ACL, bb,
+        #                     nc,nw,Paq,T,well,
+        #                     view(uf,:,t),view(qw,:,t), view(pw,:,t),
+        #                     λbc, WI, wct, prp.eVp, tM, w1, w2)
+        # end
+
+        BIW = 0.0#rBdf(bb)
+
+        return AIW, BIW
+    end
+
+    return msim, cIWC
 end
 
 function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
@@ -411,6 +439,7 @@ function make_reduce_ma3x_dims(ACL, w1, w2, nc)
     aw1 = setdiff(1:nc+nw,w1f)
     aw2 = setdiff(1:nc,w1f)
     Aaq = zeros(nc)
+    tmp = zeros(Float32, nw+1, nc)
     #AA1 = A11 - (A22\Matrix(A12'))'*A21
     #bb1 = bb[w1] - (A22\Matrix(A12'))'*bb[aw1]
 
@@ -436,12 +465,13 @@ function make_reduce_ma3x_dims(ACL, w1, w2, nc)
         #A22
 
         #APA = vcat(hcat(A11, (T.*λbc)[w1]), hcat((T.*λbc)[w1]', sum(T.*λbc))) - (A22\Matrix(AB12))'*AB21
-        AA1 = A11 - (A22\Matrix(A12'))'*A21
+        tmp .= (A22\Matrix(A12'))'
+        AA1 = A11 - tmp*A21
         return AA1
     end
     function rBdf(bb)
         #APA = vcat(hcat(A11, (T.*λbc)[w1]), hcat((T.*λbc)[w1]', sum(T.*λbc))) - (A22\Matrix(AB12))'*AB21
-        bb1 = bb[w1f] - (A22\Matrix(A12'))'*bb[aw1]
+        bb1 = bb[w1f] - tmp*bb[aw1]
         return bb1
     end
     return rAdf, rBdf
