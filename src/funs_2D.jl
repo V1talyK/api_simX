@@ -16,23 +16,30 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     λbc = zeros(Float32, nc);
     PM = zeros(Float32, nc+nw,nt)
     PM0 = zeros(Float32, nc+nw)
-    pwc = zeros(nw,nt)
-    pplc = zeros(nw,nt)
-    qwc = zeros(nw,nt)
+    pwc = zeros(Float32, nw,nt)
+    pplc = zeros(Float32, nw,nt) #Давление в ячейке
+    ppla = zeros(Float32, nw,nt) #Давление осреднено по площади
+    ppls = zeros(Float32, nw,nt) #Давление в остановленной скважине
+    qwc = zeros(Float32, nw,nt)
+    qcl = zeros(Float32, nwc)
 
     GM = ones(Float32, nc);
     bb = zeros(Float32,nc+nw)
+    bs = zeros(Float32, nc);
 
     λbc[λbi] .= gdm_prop.λb;
+    M2Wa = make_M2W(grd, well)
 
     dw = inv.(accumarray(w2,ones(length(w2))))[w2]
     tM = (M2M = sparse(w2,w1,dw,nw,nc),
-          M2Mw = sparse(w1,w2,1,nc+nw,nw))
+          M2Mw = sparse(w1,w2,1,nc+nw,nw),
+          W2Ma = M2Wa')
     actW = trues(nw,nt)
     ufl = falses(nw,nt)
 
     WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nwc)
     A, W1 = makeA(view(rc,:,1),view(rc,:,2),nc,nw,w1,w2)
+    AS = sparse(view(rc,:,1),view(rc,:,2),1.0,nc,nc)
     makeAG = make_fun_AG(grd.nc,grd.rc,grd.dx,grd.ds);
 
     qw0 = zeros(Float32, nw, nt)
@@ -49,7 +56,9 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         wct = view(wc, w2, 1)
         uft = view(uf, :, 1)
         updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
+        updAS!(AS,AG,view(rc,:,1),view(rc,:,2),nc,T,λbc,prp.eVp)
         ACL = cholesky(-A)
+        ACLS = cholesky(-AS)
         CL = make_CL_in_julia(ACL, Threads.nthreads())
         updateCL!(CL, ACL)
         PM0 .= P0
@@ -69,13 +78,26 @@ function make_sim(grd, gdm_prop, well, prp, nt)
             end
 
             wct = view(wc, w2, t)
-            PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, ACL, bb,
+            bs.=0f0;
+            bs .= bs .- T.*λbc*Paq .- prp.eVp.*view(PM0, 1:nc)
+
+            PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, ACL, bb,
                             nc,nw,Paq,T,well,
                             view(uf,:,t),view(qw,:,t), view(pw,:,t),
                             λbc, WI, wct, prp.eVp, tM, w1, w2)
+
+
+            bs[w1] .= view(bs, w1) .+ qcl
+            for iw = 1:nw
+                bs[w1[w2.==iw]] -= qcl[w2.==iw]
+                ppls[iw,t] = -(ACLS\bs)[w1[iw]]
+                bs[w1[w2.==iw]]  += qcl[w2.==iw]
+            end
+            ppla[:,t] .= tM.W2Ma*view(PM0,1:nc)
         end
         pwc[uf].=pw[uf]
-        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], AAr = AA1)
+        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], ppla = ppla,
+               ppls = ppls,  AAr = AA1)
         return rsl
     end
 
@@ -110,7 +132,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     return msim, cIWC
 end
 
-function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
+function sim_step!(PM0, qcl, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
     WI, wct, eVp, tM, w1, w2)
 
     makeB!(bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc, view(PM0,1:nc), WI, wct, eVp);
@@ -119,12 +141,20 @@ function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
     PM0 .= .-PM0
     pwc = view(PM0,nc+1:nc+nw)
     pplc = tM.M2M*view(PM0,1:nc);
-    qwc = WI.*view(T,w1).*(view(PM0,w1).-pwt[w2]).*wct
-    qwc = accumarray(w2, qwc, nw)
+    qcl .= WI.*view(T,w1).*(view(PM0,w1).-pwc[w2]).*wct
+    qwc = accumarray(w2, qcl, nw)
     nuft = .!uft
     qwc[nuft] .= qwt[nuft]
     #println(sum(abs,pplcBt.-temp_ppl))
     return PM0, pwc, pplc, qwc
+end
+
+function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
+    WI, wct, eVp, tM, w1, w2)
+    @Info "Старый вызов"
+    qcl = zeros(Float32, length(w1))
+    return sim_step!(PM0, qcl, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
+        WI, wct, eVp, tM, w1, w2)
 end
 
 function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
@@ -429,6 +459,15 @@ function updA!(A,W1,AG,r,c,nx,nw,T,λb,w1,w2,GM, WI, wct, uft, eV=0)
     updatesp!(A,w1,nx.+w2,WIg)
     updatesp!(A,nx.+w2,w1,WIg)
     updatesp!(W1,w1,w2,WIg)
+    return nothing
+end
+
+function updAS!(A,AG,r,c,nx,T,λb, eV=0)
+    updatesp!(A,r,c,AG);
+    A2 = zeros(nx)
+    accumarray!(A2,r,AG)
+    A2 .= A2 .+ T.*λb.+eV;
+    updatesp!(A,1:nx,1:nx,.-A2)
     return nothing
 end
 
