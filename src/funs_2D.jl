@@ -144,8 +144,9 @@ function sim_step!(PM0, qcl, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
     PM0 .= .-PM0
     pwc = view(PM0,nc+1:nc+nw)
     pplc = tM.M2M*view(PM0,1:nc);
-    qcl .= WI.*view(T,w1).*(view(PM0,w1).-pwc[w2]).*wct
+    qcl .= WI.*view(T,w1).*(view(PM0,w1).-pwt[w2]).*wct
     qwc = accumarray(w2, qcl, nw)
+    qcl .= WI.*view(T,w1).*(view(PM0,w1).-pwc[w2]).*wct
     nuft = .!uft
     qwc[nuft] .= qwt[nuft]
     #println(sum(abs,pplcBt.-temp_ppl))
