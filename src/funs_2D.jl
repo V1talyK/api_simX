@@ -476,3 +476,39 @@ function make_reduce_ma3x_dims(ACL, w1, w2, nc)
     end
     return rAdf, rBdf
 end
+
+
+function make_M2W(grd, well)
+    #Маска для осреднения давления по площади
+    nc = grd.nc
+    nw = length(unique(getindex.(well,2)))
+
+    w1 = getindex.(well,1)
+    w2 = getindex.(well,2)
+
+    XY = hcat(grd.X,grd.Y)
+    kdtree = KDTree(XY')
+
+    point = vcat(view(grd.X,w1)', view(grd.Y, w1)')
+    #point = hcat(getindex.(wxy,1), getindex.(wxy,2))'
+    RR = getindex.(getindex(knn(KDTree(point), point, 2),2), 1)./2;
+
+    w1g = zeros(Int64, 0)
+    w2g = zeros(Int64, 0)
+    vg = zeros(Float64, 0)
+    for iw = 1:nw
+        RRm = minimum(RR[w2.==iw])
+        idxp = zeros(Int64, 0)
+        for v in eachcol(point[:, w2.==iw])
+            idx = inrange(kdtree, v, RRm)
+            append!(idxp, idx)
+        end
+        idx = unique(idxp)
+        #scatter(XY[idx, 1], XY[idx, 2])
+        append!(w1g, idx)
+        append!(w2g, fill(iw, length(idx)))
+        append!(vg, fill(inv(length(idx)), length(idx)))
+    end
+    M2W = sparse(w1g, w2g, vg, nc, nw)
+    return M2W
+end
