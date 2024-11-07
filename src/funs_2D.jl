@@ -26,6 +26,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     GM = ones(Float32, nc);
     bb = zeros(Float32,nc+nw)
     bs = zeros(Float32, nc);
+    PMs = zeros(Float32, nc);
 
     λbc[λbi] .= gdm_prop.λb;
     M2Wa = make_M2W(grd, well)
@@ -89,9 +90,11 @@ function make_sim(grd, gdm_prop, well, prp, nt)
 
             bs[w1] .= view(bs, w1) .+ qcl
             for iw = 1:nw
-                bs[w1[w2.==iw]] -= qcl[w2.==iw]
-                ppls[iw,t] = -(ACLS\bs)[w1[iw]]
-                bs[w1[w2.==iw]]  += qcl[w2.==iw]
+                fl = w2.==iw
+                bs[w1[fl]] -= qcl[fl]
+                PMs .= ACLS\bs
+                ppls[iw,t] = - sum(view(PMs, w1[fl]))/count(fl)
+                bs[w1[fl]]  += qcl[fl]
             end
             ppla[:,t] .= tM.W2Ma*view(PM0,1:nc)
         end
@@ -151,7 +154,7 @@ end
 
 function sim_step!(PM0, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
     WI, wct, eVp, tM, w1, w2)
-    @Info "Старый вызов"
+    @info "Старый вызов"
     qcl = zeros(Float32, length(w1))
     return sim_step!(PM0, qcl, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
         WI, wct, eVp, tM, w1, w2)
