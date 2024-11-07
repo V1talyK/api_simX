@@ -477,9 +477,10 @@ end
 function make_reduce_ma3x_dims(ACL, w1, w2, nc)
     #nwc = length(w1)
     nw = length(unique(w2))
-    w1f = indexin(unique(w2),w2)
-    aw1 = setdiff(1:nc+nw,w1f)
-    aw2 = setdiff(1:nc,w1f)
+    w1f = w1
+    w2f = indexin(unique(w2),w2)
+    aw1 = setdiff(1:nc+nw,w1)
+    aw2 = setdiff(1:nc,w1)
     Aaq = zeros(nc)
     tmp = zeros(Float32, nw+1, nc)
     #AA1 = A11 - (A22\Matrix(A12'))'*A21
@@ -494,7 +495,7 @@ function make_reduce_ma3x_dims(ACL, w1, w2, nc)
     function rAdf(A, T, λbc)
         #AA = sparse(ACL)
         AA = -A;
-        A11 = AA[w1f,w1f];
+        A11 = AA[w1,w1];
         A22 = AA[aw1,aw1];
         A12 = AA[w1f,aw1]
         A21 = AA[aw1,w1]
