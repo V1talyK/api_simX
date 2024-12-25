@@ -86,7 +86,6 @@ function make_sim(grd, gdm_prop, well, prp, nt)
                             nc,nw,Paq,T,well,
                             view(uf,:,t),view(qw,:,t), view(pw,:,t),
                             λbc, WI, wct, prp.eVp, tM, w1, w2)
-            WI.*view(T,w1).*(view(PM0,w1).-pwc[w2,t]).*wct
 
             bs[w1] .= view(bs, w1) .+ qcl
             for iw = 1:nw
@@ -168,6 +167,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     nwc = length(well)
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
+    
     rc = grd.rc
     bnd_ind = grd.λbi
     he = copy(prp.he)
