@@ -167,7 +167,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     nwc = length(well)
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
-    
+
     rc = grd.rc
     bnd_ind = grd.λbi
     he = copy(prp.he)
@@ -176,14 +176,15 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     P0 = gdm_prop.P0
     dt = gdm_prop.dt
 
-    λbc = zeros(nc);
-    p0 = zeros(Float32, nc);
+    λbc = zeros(Float32, nc);
     PM = zeros(Float32, nc+nw,nt)
+    PM0 = zeros(Float32, nc+nw)
     SW = zeros(Float32, nc,nt)
     pwc = zeros(nw,nt)
     pplc = zeros(nw,nt)
     qwc = zeros(nw,nt)
-    pplcBt = zeros(Float32, nw)
+    qcl = zeros(Float32, nwc)
+
     GM = ones(Float32, nc);
     Mbt = ones(Float32, nc); Mbt .= satc.fkrp.w.(satc.Sw0i).+satc.fkrp.o.(1f0 .- satc.Sw0i)
     Tp = zeros(Float32, size(rc,1))
@@ -220,7 +221,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0)
         GM.=kp.*he.*10. *8.64*1e-3;
         AG, T = makeAG(kp.*10. *8.64*1e-3,he)
-        p0 .= P0
+        PM0 .= P0
         wct = view(wc, w2, 1)
         uft = view(uf, :, 1)
         updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct, uf,prp.eVp)
@@ -228,17 +229,17 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, w2, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         for t=1:nt
-            stream_flag .= view(p0,view(rc,:,1)) .> view(p0,view(rc,:,2))
+            stream_flag .= view(PM0,view(rc,:,1)) .> view(PM0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
-            stream_flag .= view(p0,view(rc,:,1)) .< view(p0,view(rc,:,2))
+            stream_flag .= view(PM0,view(rc,:,1)) .< view(PM0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,2)]
-            stream_flag .= view(p0,view(rc,:,1)) .== view(p0,view(rc,:,2))
+            stream_flag .= view(PM0,view(rc,:,1)) .== view(PM0,view(rc,:,2))
             Tp[stream_flag] = 2*Mbt[view(rc,stream_flag,1)].*Mbt[view(rc,stream_flag,2)]./(Mbt[view(rc,stream_flag,1)].+Mbt[view(rc,stream_flag,2)])
 
             WTp = ones(nw)
             WTp[qw[:,t].>0.] .= Mbt[w1[qw[:,t].>0.]]
 
-            bnd_stream_flag .= view(p0,bnd_ind) .> Paq
+            bnd_stream_flag .= view(PM0,bnd_ind) .> Paq
             Tpa[bnd_stream_flag] = view(Mbt[bnd_ind], bnd_stream_flag)
             # println(satc.fkrp.w.(ones(length(count(.!bnd_stream_flag)))))
             # println(Tpa[.!bnd_stream_flag])
@@ -252,17 +253,23 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             AA1[t] = rAdf(-A, Tpa1, λbc)
             CL = make_CL_in_julia(ACL, Threads.nthreads())
             updateCL!(CL, ACL)
+            #
+            # makeB!(bb, nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,PM0,WI.*WTp,wct, prp.eVp);
+            # PM[:,t] = ACL\bb;
+            # PM[:,t] .= .-PM[:,t]
+            # PM0 .= view(PM,1:nc,t)
+            # pwc[:,t] = view(PM,nc+1:nc+nw,t)
+            # pplcBt .= tM.M2M*PM0;
+            # pplc[:,t] .= pplcBt;
+            # accumarray!(view(qwc,:,t), w2, WI.*T[w1].*(PM0[w1].-pw[w2,t]))
+            # qwc[.!uf[:,t],t] .= qw[.!uf[:,t],t]
 
-            makeB!(bb, nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,p0,WI.*WTp,wct, prp.eVp);
-            PM[:,t] = ACL\bb;
-            PM[:,t] .= .-PM[:,t]
-            p0 .= view(PM,1:nc,t)
-            pwc[:,t] = view(PM,nc+1:nc+nw,t)
-            pplcBt .= tM.M2M*p0;
-            pplc[:,t] .= pplcBt;
-            accumarray!(view(qwc,:,t), w2, WI.*T[w1].*(p0[w1].-pw[w2,t]))
-            qwc[.!uf[:,t],t] .= qw[.!uf[:,t],t]
-            SW[:,t], Mbt[:] = satc(p0, view(qwc,:,t), GM, AG, false)
+            PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, ACL, bb,
+                            nc,nw,Paq,T,well,
+                            view(uf,:,t),view(qw,:,t), view(pw,:,t),
+                            λbc, WI.*WTp, wct, prp.eVp, tM, w1, w2)
+
+            SW[:,t], Mbt[:] = satc(PM0, view(qwc,:,t), GM, AG, false)
         end
         pwc[uf].=pw[uf]
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW, AAr = AA1)
