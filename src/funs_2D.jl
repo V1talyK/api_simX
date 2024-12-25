@@ -64,9 +64,6 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         updateCL!(CL, ACL)
         PM0 .= P0
         AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
-        rAdf, rBdf = make_reduce_ma3x_dims(A, w1, w2, nc)
-        AA1 = rAdf(A, T, λbc)
-
         uuf = !all(allunique.(eachrow(uf)))
 
         for t=1:nt
@@ -99,7 +96,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         end
         pwc[uf].=pw[uf]
         rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], ppla = ppla,
-               ppls = ppls,  AAr = AA1)
+               ppls = ppls)
         return rsl
     end
 
@@ -199,9 +196,6 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     ufl = falses(nw,nt)
 
     WI = 2*pi./fill(log(0.14*sqrt(2)*grd.dx/0.05),nwc)
-    w1 = getindex.(well,1)
-    w2 = getindex.(well,2)
-
     A, W1 = makeA(view(rc,:,1),view(rc,:,2),nc,nw,w1,w2)
     makeAG = make_fun_AG(grd.nc,grd.rc,grd.dx,grd.ds);
 
@@ -216,7 +210,8 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
     Tpa1 = zeros(Float32, nc)
     bnd_stream_flag = trues(length(Tpa))
 
-    AA1 = Vector(undef, nt)
+    WTp = ones(Float32, nw)
+    AIW = Vector(undef, nt)
 
     function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0)
         GM.=kp.*he.*10. *8.64*1e-3;
@@ -226,7 +221,6 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         uft = view(uf, :, 1)
         updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct, uft, prp.eVp)
         ACL = cholesky(-A)
-        rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, w2, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         for t=1:nt
             uft = view(uf, :, t)
@@ -237,7 +231,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             stream_flag .= view(PM0,view(rc,:,1)) .== view(PM0,view(rc,:,2))
             Tp[stream_flag] = 2*Mbt[view(rc,stream_flag,1)].*Mbt[view(rc,stream_flag,2)]./(Mbt[view(rc,stream_flag,1)].+Mbt[view(rc,stream_flag,2)])
 
-            WTp = ones(nw)
+            WTp.=1f0;
             WTp[qw[:,t].>0.] .= Mbt[w1[qw[:,t].>0.]]
 
             bnd_stream_flag .= view(PM0,bnd_ind) .> Paq
@@ -250,20 +244,50 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI, WTp.*wct,uft,prp.eVp)
             ACL = cholesky(-A)
 
+            PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, ACL, bb,
+                            nc,nw,Paq,T,well,
+                            uft,view(qw,:,t), view(pw,:,t),
+                            λbc, WI.*WTp, wct, prp.eVp, tM, w1, w2)
+
+            SW[:,t], Mbt[:] = satc(PM0, view(qwc,:,t), GM, AG, false)
+        end
+        pwc[uf].=view(pw,uf)
+        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW)
+        return rsl
+    end
+
+    function cIWC(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0)
+        #Расчёт матрицы связи скважин
+        GM.=kp.*he.*10. *8.64*1e-3;
+        AG, T = makeAG(kp.*10. *8.64*1e-3,he)
+        PM0 .= P0
+        wct = view(wc, w2, 1)
+        uft = view(uf, :, 1)
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct, uft, prp.eVp)
+        rAdf, rBdf = make_reduce_ma3x_dims(A, w1, w2, nc)
+        #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
+        for t=1:nt
+            uft = view(uf, :, t)
+            stream_flag .= view(PM0,view(rc,:,1)) .> view(PM0,view(rc,:,2))
+            Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
+            stream_flag .= view(PM0,view(rc,:,1)) .< view(PM0,view(rc,:,2))
+            Tp[stream_flag] = Mbt[view(rc,stream_flag,2)]
+            stream_flag .= view(PM0,view(rc,:,1)) .== view(PM0,view(rc,:,2))
+            Tp[stream_flag] = 2*Mbt[view(rc,stream_flag,1)].*Mbt[view(rc,stream_flag,2)]./(Mbt[view(rc,stream_flag,1)].+Mbt[view(rc,stream_flag,2)])
+
+            WTp.=1f0;
+            WTp[qw[:,t].>0.] .= Mbt[w1[qw[:,t].>0.]]
+
+            bnd_stream_flag .= view(PM0,bnd_ind) .> Paq
+            Tpa[bnd_stream_flag] = view(Mbt[bnd_ind], bnd_stream_flag)
+            Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(Float32, count(.!bnd_stream_flag)))
+
+            wct = view(wc, w2, t)
+            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI, WTp.*wct,uft,prp.eVp)
+            ACL = cholesky(-A)
+
             Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
-            AA1[t] = rAdf(-A, Tpa1, λbc)
-            CL = make_CL_in_julia(ACL, Threads.nthreads())
-            updateCL!(CL, ACL)
-            #
-            # makeB!(bb, nc,nw,Paq,T,well,uf[:,t],qw[:,t],pw[:,t],λbc,PM0,WI.*WTp,wct, prp.eVp);
-            # PM[:,t] = ACL\bb;
-            # PM[:,t] .= .-PM[:,t]
-            # PM0 .= view(PM,1:nc,t)
-            # pwc[:,t] = view(PM,nc+1:nc+nw,t)
-            # pplcBt .= tM.M2M*PM0;
-            # pplc[:,t] .= pplcBt;
-            # accumarray!(view(qwc,:,t), w2, WI.*T[w1].*(PM0[w1].-pw[w2,t]))
-            # qwc[.!uf[:,t],t] .= qw[.!uf[:,t],t]
+            AIW[t] = rAdf(-A, Tpa1, λbc)
 
             PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, ACL, bb,
                             nc,nw,Paq,T,well,
@@ -272,12 +296,11 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
             SW[:,t], Mbt[:] = satc(PM0, view(qwc,:,t), GM, AG, false)
         end
-        pwc[uf].=pw[uf]
-        rsl = (ppl = pplc, qw = qwc, pw = pwc,  PM = PM[1:nc,:], SW, AAr = AA1)
-        return rsl
+        BIW = 0.0#rBdf(bb)
+        return AIW, BIW
     end
 
-    return msim
+    return msim, cIWC
 end
 
 function make_gdm_prop(;bet0 = 1e-4,
