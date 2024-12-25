@@ -29,9 +29,13 @@ prp.kp[.&((grd.X[well[2][1]]+grd.X[well[5][1]])/2 .< grd.X,
 
 
 prp.kp[.&(3*grd.X.+grd.Y.>2100,
-          3*grd.X.+grd.Y.<3100)] .*= 10
+          3*grd.X.+grd.Y.<3100,
+          grd.X.>150.0,
+          grd.X.<1850.0,
+          grd.Y.>150.0,
+          grd.Y.<1850.0)] .*= 4
 
-UnicodePlots.heatmap(reshape(prp.kp, grd.nx, grd.ny)')|>println
+#UnicodePlots.heatmap(reshape(prp.kp, grd.nx, grd.ny)')|>println
 wxy = getindex.(wxy13,2)
 plt = plot_map_and_well(range(0, 2000, grd.nx),
                   range(0, 2000, grd.ny),
@@ -88,7 +92,7 @@ end
 rsl = sim_calc(qw = qw, uf = uf, pw = pw)
 
 sum(rsl.qw[rsl.qw.>0])*30.4./(2000*2000*10*0.2)
-iw = 6
+iw = 11
   plt = plot(rsl.ppl[iw,:])
   plot!(plt, rsl.pw[iw,:])
   plot!(plt, rsl.ppls[iw,:])
@@ -156,22 +160,24 @@ prm = Dict("bnd"=>[(0.0, 0.0),
 pth = joinpath(Base.source_dir() ,"script_$tag.json")
     write_to_json(pth, prm)
 
-gdm_sat = make_gdm_prop_sat(mu_o = 3f0)
+gdm_sat = make_gdm_prop_sat(mu_o = 10.0f0, n_o = 2, n_w = 2)
 satf = calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt)
     sim_calc = make_sim2f(grd, gdm_prop, well, prp, nt, satf)
 
-rsl = sim_calc(qw = qw)
+rsl = sim_calc(qw = qw, uf = uf, pw = pw)
 wtc = calc_wtc(rsl.SW, gdm_sat.fkrp, well);
 wtc[rsl.qw .< 0.0] .= 0.0;
 qo = rsl.qw.*(1 .- wtc);  qo[rsl.qw .< 0.0] .= 0.0;
-iw = 6
+iw = 13
   plt = plot(qw[iw,:], label = "жид.")
+  plt_twin = twinx(plt);
   plot!(plt, qo[iw,:], label = "нефть.")
+  plot!(plt_twin, wtc[iw,:], label = "обв.", lc = :black)
 kin = cumsum(sum(qo, dims=1)[:])/(sum(prp.Vp.*(1.0 .- gdm_sat.Sw0))).*gdm_prop.dt
 plot(kin)
 
 plt = plot_map_and_well(range(0, 2000, grd.nx),
                   range(0, 2000, grd.ny),
-                  reshape(rsl.SW[:,90], grd.nx, grd.ny)', wxy, [iw_prod, iw_inj], ["Доб.", "Наг."],
+                  reshape(rsl.SW[:,20], grd.nx, grd.ny)', wxy, [iw_prod, iw_inj], ["Доб.", "Наг."],
                   [:circle, :dtriangle])
 Plots.annotate!(plt, getindex.(wxy,1).+120, getindex.(wxy,2).-50, text.(string.("№", 1:nw),12))
