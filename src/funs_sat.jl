@@ -71,10 +71,10 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
 
-    bbw = zeros(nc)
+    bbw = zeros(Float32, nc)
     krw = zeros(Float32, nc)
     kro = zeros(Float32, nc)
-    AWP = zeros(nc)
+    AWP = zeros(Float32, nc)
     dPaq = zeros(Float32, length(sbi))
     PM0 = zeros(Float32, nc); PM0 .= gdm_prop.P0;
 
@@ -105,7 +105,8 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
         flag = true
 
         AGP .= .*(AG,dP)
-        AWP = accumarray(r, abs.(AGP))./2
+        accumarray!(AWP, r, abs.(AGP))
+        AWP./=2
         AWP[w1] *= 2
         alpt, alpi = findmax(AWP.*Δt./prp.Vp)
         alp0 = 1/alpt

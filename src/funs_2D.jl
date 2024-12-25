@@ -70,7 +70,7 @@ function make_sim(grd, gdm_prop, well, prp, nt)
             if uuf
                 uft = view(uf, :, t)
                 updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
-                ACL = cholesky(-A)
+                cholesky!(ACL, -A)
                 CL = make_CL_in_julia(ACL, Threads.nthreads())
                 updateCL!(CL, ACL)
             end
@@ -242,7 +242,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
             wct = view(wc, w2, t)
             updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI, WTp.*wct,uft,prp.eVp)
-            ACL = cholesky(-A)
+            cholesky!(ACL, -A)
 
             PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, ACL, bb,
                             nc,nw,Paq,T,well,
