@@ -191,7 +191,9 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
     return calc_tstep
 end
 
-function make_gdm_prop_sat(;mu_o = 1f0, mu_w = 1f0)
+function make_gdm_prop_sat(;mu_o = 1f0, mu_w = 1f0,
+                            n_o::Signed = 2,
+                            n_w::Signed = 2)
     bet = 1e-4;
     Swaq = 1f0;
     Sw0 = 0f0;
@@ -199,8 +201,8 @@ function make_gdm_prop_sat(;mu_o = 1f0, mu_w = 1f0)
     mu = (o = Float32(mu_o), w = Float32(mu_w))
     xo = 0f0;
     xw = 0f0;
-    n_oil = 1# - степень фазовой нефть
-    n_wather = 1# - степень фазовой вода
+    n_oil = n_o# - степень фазовой нефть
+    n_wather = n_w# - степень фазовой вода
     fkrw, fdkrw = make_calc_krw(n_wather, 1f0, xo, xw, mu.w)
     fkro, fdkro = make_calc_krw(n_oil, 1f0, xw, xo, mu.o)
     fkrp = FKR(fkrw, fkro)
