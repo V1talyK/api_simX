@@ -162,9 +162,10 @@ pth = joinpath(Base.source_dir() ,"script_$tag.json")
 
 gdm_sat = make_gdm_prop_sat(mu_o = 10.0f0, n_o = 2, n_w = 2)
 satf = calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt)
-    sim_calc = make_sim2f(grd, gdm_prop, well, prp, nt, satf)
+    sim_calc, cIWf = make_sim2f(grd, gdm_prop, well, prp, nt, satf)
 
 rsl = sim_calc(qw = qw, uf = uf, pw = pw)
+w2w, _ = cIWf(qw=qw)
 wtc = calc_wtc(rsl.SW, gdm_sat.fkrp, well);
 wtc[rsl.qw .< 0.0] .= 0.0;
 qo = rsl.qw.*(1 .- wtc);  qo[rsl.qw .< 0.0] .= 0.0;
@@ -175,6 +176,8 @@ iw = 13
   plot!(plt_twin, wtc[iw,:], label = "обв.", lc = :black)
 kin = cumsum(sum(qo, dims=1)[:])/(sum(prp.Vp.*(1.0 .- gdm_sat.Sw0))).*gdm_prop.dt
 plot(kin)
+
+plot(getindex.(w2w,1,5))
 
 plt = plot_map_and_well(range(0, 2000, grd.nx),
                   range(0, 2000, grd.ny),
