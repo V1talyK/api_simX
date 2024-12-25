@@ -76,7 +76,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
     kro = zeros(Float32, nc)
     AWP = zeros(nc)
     dPaq = zeros(Float32, length(sbi))
-    PM0 = zeros(nc); PM0 .= gdm_prop.P0;
+    PM0 = zeros(Float32, nc); PM0 .= gdm_prop.P0;
 
     TAGP = zeros(length(r))
     AGP = zeros(Float32, length(r))
@@ -147,7 +147,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             TAGP .= .*(Tw,AGP)
             accumarray!(AWP, r, TAGP)
             #A2[sbi] .= view(A2,sbi) .+ sbv.*view(GM,sbi)
-            A2 .= prp.eVp.*Sw0i.*(Pt .- PM0)#./alp;
+            A2 .= prp.eVp.*Sw0i.*(view(Pt, 1:nc) .- PM0)#./alp;
 
             bw[sbi] .= sbv[sbi].*view(GM,sbi)
             bw_aq[bfl] = view(bw,view(sbi,bfl)).*1 .*view(bale,view(sbi,bfl))
@@ -180,7 +180,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
             flag = (cum_Δt < 1) & (k<1000)
 
         end
-        PM0 .= Pt
+        PM0 .= view(Pt, 1:nc)
         #println(cum_Δt)
         #println(sum(Sw0i.*prp.Vp) - sum(Sw00.*prp.Vp),"  ",krw[w1P].*view(qt,prodI).*bale[w1P]*30.5,
         #                                              "  ",kro[w1P].*view(qt,prodI).*bale[w1P]*30.5,

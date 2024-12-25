@@ -224,11 +224,12 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
         PM0 .= P0
         wct = view(wc, w2, 1)
         uft = view(uf, :, 1)
-        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct, uf,prp.eVp)
+        updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct, uft, prp.eVp)
         ACL = cholesky(-A)
         rAdf, rBdf = make_reduce_ma3x_dims(ACL, w1, w2, nc)
         #AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         for t=1:nt
+            uft = view(uf, :, t)
             stream_flag .= view(PM0,view(rc,:,1)) .> view(PM0,view(rc,:,2))
             Tp[stream_flag] = Mbt[view(rc,stream_flag,1)]
             stream_flag .= view(PM0,view(rc,:,1)) .< view(PM0,view(rc,:,2))
@@ -246,7 +247,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
             Tpa[.!bnd_stream_flag] = satc.fkrp.w.(ones(Float32, count(.!bnd_stream_flag)))
 
             wct = view(wc, w2, t)
-            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI, WTp.*wct,uf,prp.eVp)
+            updA!(A,W1,AG.*Tp,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI, WTp.*wct,uft,prp.eVp)
             ACL = cholesky(-A)
 
             Tpa1[bnd_ind] .= T[bnd_ind].*Tpa;
@@ -266,7 +267,7 @@ function make_sim2f(grd, gdm_prop, well, prp, nt, satc)
 
             PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, ACL, bb,
                             nc,nw,Paq,T,well,
-                            view(uf,:,t),view(qw,:,t), view(pw,:,t),
+                            uft,view(qw,:,t), view(pw,:,t),
                             λbc, WI.*WTp, wct, prp.eVp, tM, w1, w2)
 
             SW[:,t], Mbt[:] = satc(PM0, view(qwc,:,t), GM, AG, false)
