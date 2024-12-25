@@ -28,4 +28,6 @@ wtc = calc_wtc(rsl.SW, gdm_sat.fkrp, well);
 wtc[rsl.qw .< 0.0] .= 0.0;
 qo = rsl.qw.*(1 .- wtc);  qo[rsl.qw .< 0.0] .= 0.0;
 kin = cumsum(sum(qo, dims=1)[:])/(sum(prp.Vp.*(1.0 .- gdm_sat.Sw0))).*gdm_prop.dt
+println(kin)
+println("wtc=", wtc)
 @test (kin[end] <= 1) & all(wtc.<=1)
