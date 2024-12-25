@@ -16,7 +16,7 @@ well = make_well(wxy9,grd)
 nw = length(well)
 
 satf = calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt)
-    sim_calc = make_sim2f(grd, gdm_prop, well, prp, nt, satf)
+    sim_calc, _ = make_sim2f(grd, gdm_prop, well, prp, nt, satf)
 
 qw = rand(0.:2.:64., nw, nt);
 qw[[1,3,7,9],:] .= (-abs.(qw[[1,3,7,9],:]).-10);
