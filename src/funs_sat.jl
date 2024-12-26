@@ -65,8 +65,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
     bw_aq = zeros(Float32, length(sbi))
     bw_aq .= fkrp.w(gdm_sat.Swaq)
 
-    A2=zeros(Float64,nc);
-    AW=zeros(Float64,nc);
+    A2 = zeros(Float32, nc);
 
     w1 = getindex.(well,1)
     w2 = getindex.(well,2)
@@ -78,7 +77,7 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
     dPaq = zeros(Float32, length(sbi))
     PM0 = zeros(Float32, nc); PM0 .= gdm_prop.P0;
 
-    TAGP = zeros(length(r))
+    TAGP = zeros(Float32, length(r))
     AGP = zeros(Float32, length(r))
     dP = zeros(Float32, length(r))
 
@@ -178,9 +177,9 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
                     Sw0i .= clamp.(Sw0i,0.0,1.0)
             #println(Sw0i)
             #wer
-            flag = (cum_Δt < 1) & (k<1000)
-
+            flag = (cum_Δt < 1) & (k<5000)
         end
+        #println(k," ", cum_Δt)
         PM0 .= view(Pt, 1:nc)
         #println(cum_Δt)
         #println(sum(Sw0i.*prp.Vp) - sum(Sw00.*prp.Vp),"  ",krw[w1P].*view(qt,prodI).*bale[w1P]*30.5,
