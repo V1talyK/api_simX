@@ -49,19 +49,23 @@ function make_sim(grd, gdm_prop, well, prp, nt)
     uf0 = falses(nw, nt)
     kp0 = prp.kp
     he0 = prp.he
+    flag_stop_well0 = false; #Флаг на моделирование остановки скважин
 
-
-    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0)
+    function msim(; qw = qw0, pw = pw0, kp = kp0, he = he0, uf = uf0, wc = wc0, fsw = flag_stop_well0)
         GM.=kp.*he.*10. *8.64*1e-3;
         AG, T = makeAG(kp.*10. *8.64*1e-3,he)
         wct = view(wc, w2, 1)
         uft = view(uf, :, 1)
         updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
-        updAS!(AS,AG,view(rc,:,1),view(rc,:,2),nc,T,λbc,prp.eVp)
         ACL = cholesky(-A)
-        ACLS = cholesky(-AS)
         CL = make_CL_in_julia(ACL, Threads.nthreads())
         updateCL!(CL, ACL)
+
+        updAS!(AS,AG,view(rc,:,1),view(rc,:,2),nc,T,λbc,prp.eVp)
+        ACLS = cholesky(-AS)
+        CLS = make_CL_in_julia(ACLS, Threads.nthreads())
+        updateCL!(CLS, ACLS)
+
         PM0 .= P0
         AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         uuf = !all(allunique.(eachrow(uf)))
@@ -71,7 +75,6 @@ function make_sim(grd, gdm_prop, well, prp, nt)
                 uft = view(uf, :, t)
                 updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
                 cholesky!(ACL, -A)
-                CL = make_CL_in_julia(ACL, Threads.nthreads())
                 updateCL!(CL, ACL)
             end
 
@@ -79,18 +82,20 @@ function make_sim(grd, gdm_prop, well, prp, nt)
             bs.=0f0;
             bs .= bs .- T.*λbc*Paq .- prp.eVp.*view(PM0, 1:nc)
 
-            PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, ACL, bb,
+            PM[:,t], pwc[:,t], pplc[:,t], qwc[:,t] = sim_step!(PM0, qcl, CL, bb,
                             nc,nw,Paq,T,well,
                             view(uf,:,t),view(qw,:,t), view(pw,:,t),
                             λbc, WI, wct, prp.eVp, tM, w1, w2)
-
-            bs[w1] .= view(bs, w1) .+ qcl
-            for iw = 1:nw
-                fl = w2.==iw
-                bs[w1[fl]] -= qcl[fl]
-                PMs .= ACLS\bs
-                ppls[iw,t] = - sum(view(PMs, w1[fl]))/count(fl)
-                bs[w1[fl]]  += qcl[fl]
+            if fsw
+                bs[w1] .= view(bs, w1) .+ qcl
+                for iw = 1:nw
+                    fl = w2.==iw
+                    bs[w1[fl]] -= qcl[fl]
+                    #PMs .= ACLS\bs
+                    back_slash_slvr!(PMs, CLS, bs)
+                    ppls[iw,t] = - sum(view(PMs, w1[fl]))/count(fl)
+                    bs[w1[fl]]  += qcl[fl]
+                end
             end
             ppla[:,t] .= tM.W2Ma*view(PM0,1:nc)
         end
@@ -108,8 +113,8 @@ function make_sim(grd, gdm_prop, well, prp, nt)
         uft = view(uf, :, 1)
         updA!(A,W1,AG,view(rc,:,1),view(rc,:,2),nc,nw,T,λbc,w1,w2,GM,WI,wct,uft,prp.eVp)
         ACL = cholesky(-A)
-        CL = make_CL_in_julia(ACL, Threads.nthreads())
-        updateCL!(CL, ACL)
+        # CL = make_CL_in_julia(ACL, Threads.nthreads())
+        # updateCL!(CL, ACL)
         PM0 .= P0
         AM = transpose(convert(Array{Float32,2}, ACL\tM.M2Mw))
         rAdf, rBdf = make_reduce_ma3x_dims(A, w1, w2, nc)
@@ -136,16 +141,17 @@ function sim_step!(PM0, qcl, ACL, bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc,
 
     makeB!(bb, nc,nw,Paq,T,well,uft,qwt,pwt,λbc, view(PM0,1:nc), WI, wct, eVp);
 
-    PM0 .= ACL\bb;
+    #PM0 .= ACL\bb;
+    back_slash_slvr!(PM0, ACL, bb)
     PM0 .= .-PM0
     pwc = view(PM0,nc+1:nc+nw)
     pplc = tM.M2M*view(PM0,1:nc);
-    qcl .= WI.*view(T,w1).*(view(PM0,w1).-pwt[w2]).*wct
+    qcl .= WI.*view(T,w1).*(view(PM0,w1).-view(pwt,w2)).*wct
     qwc = accumarray(w2, qcl, nw)
     nuft = .!uft
     qwc[nuft] .= qwt[nuft]
     pwc[uft] .= pwt[uft]
-    qcl .= WI.*view(T,w1).*(view(PM0,w1).-pwc[w2]).*wct
+    qcl .= WI.*view(T,w1).*(view(PM0,w1).-view(pwc,w2)).*wct
     #println(sum(abs,pplcBt.-temp_ppl))
     return PM0, pwc, pplc, qwc
 end
