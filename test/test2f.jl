@@ -3,7 +3,7 @@ grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 0.5, he_init = 5, nt_init = 480)
 
 grd, gdm_prop, prp, x, nt = make_gdm(kp_init = 10,
                                      he_init = 0.5,
-                                     nt_init = 60,
+                                     nt_init = 120,
                                      nx_init = 100,
                                      ny_init = 100,
                                      Lx_init = 1000,
@@ -31,3 +31,9 @@ kin = cumsum(sum(qo, dims=1)[:])/(sum(prp.Vp.*(1.0 .- gdm_sat.Sw0))).*gdm_prop.d
 println(kin)
 println("wtc=", wtc)
 @test (kin[end] <= 1) & all(wtc.<=1)
+
+
+# plt = plot_map_and_well(range(0, 1000, grd.nx),
+#                   range(0, 1000, grd.ny),
+#                   reshape(rsl.SW[:,120], grd.nx, grd.ny)', wxy9, [[2,4,5,6,8], [1,3,7,9]], ["Доб.", "Наг."],
+#                   [:circle, :dtriangle])

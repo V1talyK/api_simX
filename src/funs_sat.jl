@@ -187,7 +187,6 @@ function calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt;
     #                                                  "  ",sum(bw))
         return Sw0i, krw .+ kro
     end
-
     return calc_tstep
 end
 
