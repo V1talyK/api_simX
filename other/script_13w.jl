@@ -12,7 +12,7 @@ grd, gdm_prop, prp, x, nt = make_gdm(;he_init = 10.,
                                      Paq = 10,
                                      λb = 0.25)
 
-x = make_well_grid(grd, 0.25, 5)
+x = ITPM_SimX.make_well_grid(grd, 0.25, 5)
 wxy13 = collect(zip(1:13,collect(Iterators.product(x,x))[1:2:25]))
 well = make_well(wxy13,grd)
 nw = length(unique(getindex.(well,2)))
@@ -42,6 +42,10 @@ plt = plot_map_and_well(range(0, 2500, grd.nx),
                   reshape(prp.kp, grd.nx, grd.ny)', wxy, [iw_prod, iw_inj], ["Доб.", "Наг."],
                   [:circle, :dtriangle])
 Plots.annotate!(plt, getindex.(wxy,1).+120, getindex.(wxy,2).-50, text.(string.("№", 1:nw),12))
+
+pth = joinpath(Base.source_dir(),"map_13w")
+Plots.savefig(pth)
+Plots.svg(pth)
 
 sim_calc, cIWC = make_sim(grd,gdm_prop, well, prp, nt)
 qw = rand(-1:0.1:1, nw, nt);
