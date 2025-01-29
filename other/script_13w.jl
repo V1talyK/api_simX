@@ -1,3 +1,4 @@
+using ITPM_SimX
 using Plots, SimScriptTool, UnicodePlots
 tag = "13w"
 grd, gdm_prop, prp, x, nt = make_gdm(;he_init = 10.,
@@ -160,7 +161,7 @@ for iw = 1:nw
 end
 
 head = ["id","numb","date","liquid","oil","water","injection","bhp","cellp_m","opra_p","opra_i"]
-pth = joinpath(Base.source_dir(),"script_$(tag)_2500.csv")
+pth = joinpath(Base.source_dir(),"script_$(tag)_2500_v1.csv")
     write_to_csv(pth, tlb, head)
 
 prm = Dict("bnd"=>[(0.0, 0.0),
