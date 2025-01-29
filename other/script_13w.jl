@@ -170,7 +170,7 @@ prm = Dict("bnd"=>[(0.0, 0.0),
            "wxy"=>wxy13,
            "wkp"=>prp.kp[getindex.(well,1)],
            "whe"=>prp.he[getindex.(well,1)],
-           "kp"=>round.(prp.mp, sigdigits=3),
+           "kp"=>round.(prp.kp, sigdigits=3),
            "he"=>round.(prp.he, sigdigits=3),
            "mp"=>round.(prp.mp, sigdigits=3),
            "prop"=>gdm_prop)
