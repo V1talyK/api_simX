@@ -3,11 +3,11 @@ using Plots, SimScriptTool, UnicodePlots
 using StatsBase
 include("/home/lik/proto/tools/plotlibs.jl/src/maplibs.jl")
 
-tag = "13w2f"
+tag = "3w_prc"
 grd, gdm_prop, prp, x, nt = make_gdm(;he_init = 10.,
                                      kp_init = 50,
                                      mp_init = 0.2,
-                                     nt_init = 240,
+                                     nt_init =600,
                                      nx_init = 51,
                                      ny_init = 51,
                                      Lx_init = 2500,
@@ -20,43 +20,13 @@ x = ITPM_SimX.make_well_grid(grd, 0.25, 5)
 wxy13 = collect(zip(1:13,collect(Iterators.product(x,x))[1:2:25]))
 well = make_well(wxy13,grd)
 nw = length(unique(getindex.(well,2)))
-iw_inj = [4,5,9,10]
+iw_inj = [7]
 iw_prod = setdiff(1:13,iw_inj)
 
 
-# prp.kp[.&(abs.((grd.X[well[2][1]]+grd.X[well[5][1]])/2 .- grd.X).<20,
-#         (grd.Y[well[5][1]]+grd.Y[well[6][1]])/2 .<=grd.Y,
-#         (grd.Y[well[12][1]]+grd.Y[well[13][1]])/2 + 600 .>=grd.Y)] .*= 0.01
-#
-# prp.kp[.&((grd.X[well[2][1]]+grd.X[well[5][1]])/2 .< grd.X,
-#         abs.((grd.Y[well[5][1]]+grd.Y[well[6][1]])/2 .- grd.Y).<20)] .*= 0.01
-
-
-prp.kp[.&(3*grd.X.+grd.Y.>3300,
-          3*grd.X.+grd.Y.<3900,
-          #grd.X.>150.0,
-          #grd.X.<2250.0,
-          #grd.Y.>150.0,
-          #grd.Y.<2250.0
-          )] .= 400
-
-prp.kp[.&(-grd.X.+3.5*grd.Y.>700,
-          -grd.X.+3*grd.Y.<1100,
-          grd.Y.>150.0,
-          grd.Y.<2250.0,
-          grd.X.>900.0,
-          #grd.X.<2250.0
-          )] .= 400.
-
-prp.kp[.&(4*grd.X.-grd.Y.>5300,
-          4*grd.X.-grd.Y.<5900,
-          #grd.X.>150.0,
-          #grd.X.<2250.0,
-          grd.Y.>650.0,
-          #grd.Y.<2250.0
-          )] .= 400.
-
-#UnicodePlots.heatmap(reshape(prp.kp, grd.nx, grd.ny)')|>println
+pflag = rand(length(prp.kp)).<0.5
+prp.kp[pflag] .= 5
+prp.kp[.!pflag] .= 95
 wxy = getindex.(wxy13,2)
 plt = plot_map(range(0, 2500, grd.nx), range(0, 2500, grd.ny),
               reshape(prp.kp, grd.nx, grd.ny)';
@@ -80,21 +50,21 @@ pw = 2*ones(nw, nt);
 uf =  falses(nw, nt)
 uf[iw_inj,:] .= true
 pw[iw_inj,:] .= 14
-uf[iw_inj,1:36] .= false
-qw[iw_inj,1:12] .= 0.0
-qw[iw_inj[1],13:36] .= -qw[iw_inj[1],13:36]./4
-qw[iw_inj[2],19:36] .= -qw[iw_inj[2],19:36]./4; qw[iw_inj[2],13:18] .=0;
-qw[iw_inj[3],25:36] .= -qw[iw_inj[3],25:36]./4; qw[iw_inj[3],13:24] .=0;
-qw[iw_inj[4],31:36] .= -qw[iw_inj[4],31:36]./4; qw[iw_inj[4],13:30] .=0;
-
-pw[iw_inj,:] .+= rand(-0.2:0.1:0.2,length(iw_inj),nt)
-pw[iw_inj[1],25:36] .-=1; pw[iw_inj[1],160:180] .-=4
-pw[iw_inj[2],48:60] .+=2; pw[iw_inj[2],100:120] .+=3; pw[iw_inj[2],140:180] .+=3
-pw[iw_inj[3],54:80] .-=(54:80)./80; pw[iw_inj[3],140:200] .-=(0:60)./30
-pw[iw_inj[4],36:nt] .+=sin.((36:nt)./10)-cos.((36:nt)./12)
-
-qw[iw_prod[4],:] .= 2000 .+qw[iw_prod[4],:]./(maximum(qw[iw_prod[4],:])-minimum(qw[iw_prod[4],:]))*500
-qw[iw_prod[4],72:end] .= 0.0
+# uf[iw_inj,1:36] .= false
+# qw[iw_inj,1:12] .= 0.0
+# qw[iw_inj[1],13:36] .= -qw[iw_inj[1],13:36]./4
+# qw[iw_inj[2],19:36] .= -qw[iw_inj[2],19:36]./4; qw[iw_inj[2],13:18] .=0;
+# qw[iw_inj[3],25:36] .= -qw[iw_inj[3],25:36]./4; qw[iw_inj[3],13:24] .=0;
+# qw[iw_inj[4],31:36] .= -qw[iw_inj[4],31:36]./4; qw[iw_inj[4],13:30] .=0;
+#
+# pw[iw_inj,:] .+= rand(-0.2:0.1:0.2,length(iw_inj),nt)
+# pw[iw_inj[1],25:36] .-=1; pw[iw_inj[1],160:180] .-=4
+# pw[iw_inj[2],48:60] .+=2; pw[iw_inj[2],100:120] .+=3; pw[iw_inj[2],140:180] .+=3
+# pw[iw_inj[3],54:80] .-=(54:80)./80; pw[iw_inj[3],140:200] .-=(0:60)./30
+# pw[iw_inj[4],36:nt] .+=sin.((36:nt)./10)-cos.((36:nt)./12)
+#
+# qw[iw_prod[4],:] .= 2000 .+qw[iw_prod[4],:]./(maximum(qw[iw_prod[4],:])-minimum(qw[iw_prod[4],:]))*500
+# qw[iw_prod[4],72:end] .= 0.0
 #qw[iw_prod[4],qw[iw_prod[4],:].<1800] .= 1800
 #uf[iw_prod[4],:] .= true
 #pw[iw_prod[4],:]
@@ -142,7 +112,7 @@ add_well!(plt, wxy, [iw_prod, iw_inj], ["Доб.", "Наг."],
 add_wn!(plt, wxy)
 
 
-gdm_sat = make_gdm_prop_sat(mu_o = 5.0f0, n_o = 2, n_w = 2)
+gdm_sat = make_gdm_prop_sat(mu_o = 2.0f0, n_o = 2, n_w = 2)
 satf = calc_sat_step(prp, grd, gdm_prop, gdm_sat, well, nt)
     sim_calc, cIWf = make_sim2f(grd, gdm_prop, well, prp, nt, satf)
 
@@ -167,7 +137,7 @@ rsl = sim_calc(qw = qw, uf = uf, pw = pw)
 wtc = calc_wtc(rsl.SW, gdm_sat.fkrp, well);
 wtc[rsl.qw .< 0.0] .= 0.0;
 qo = rsl.qw.*(1 .- wtc);  qo[rsl.qw .< 0.0] .= 0.0;
-iw = 3
+iw = 10
   plt = plot(qw[iw,:], label = "жид.")
   plt_twin = twinx(plt);
   plot!(plt, qo[iw,:], label = "нефть.")
@@ -179,7 +149,7 @@ plot(getindex.(w2w,1,5))
 
 plt = plot_map(range(0, 2500, grd.nx),
                   range(0, 2500, grd.ny),
-                  reshape(rsl.SW[:,200], grd.nx, grd.ny)')
+                  reshape(rsl.SW[:,500], grd.nx, grd.ny)')
 add_well!(plt, wxy, [iw_prod, iw_inj], ["Доб.", "Наг."],
                   [:circle, :dtriangle])
 Plots.annotate!(plt, getindex.(wxy,1).+120, getindex.(wxy,2).-50, text.(string.("№", 1:nw),12))
